@@ -358,3 +358,80 @@ export function tryDoubleClickFoundation(
 export function freshGame(rng: () => number): GameState {
   return applyAutoFoundationChain(dealNewGame(rng));
 }
+
+const ALL_MOVE_TARGETS: MoveTarget[] = (() => {
+  const t: MoveTarget[] = [];
+  for (let i = 0; i < 4; i++) t.push({ kind: "foundation", pile: i });
+  for (let c = 0; c < 7; c++) t.push({ kind: "tableau", col: c });
+  t.push({ kind: "freeCell" });
+  return t;
+})();
+
+/** Every source from which the player could start a move (for mobility heuristics). */
+export function enumerateMoveSources(state: GameState): MoveSource[] {
+  const out: MoveSource[] = [];
+  if (state.waste.length > 0) out.push({ kind: "waste" });
+  if (state.stock.length === 0 && state.freeCell !== null) {
+    out.push({ kind: "freeCell" });
+  }
+  for (let c = 0; c < 7; c++) {
+    const col = state.tableau[c]!;
+    for (let start = 0; start < col.length; start++) {
+      if (!isValidDescendingRun(col, start)) continue;
+      out.push({ kind: "tableau", col: c, start });
+    }
+  }
+  return out;
+}
+
+/** Count of distinct legal card moves (source × target), excluding stock draw. */
+export function countLegalMoves(state: GameState): number {
+  let n = 0;
+  for (const src of enumerateMoveSources(state)) {
+    for (const tgt of ALL_MOVE_TARGETS) {
+      if (tryApplyMove(state, src, tgt) !== null) n++;
+    }
+  }
+  return n;
+}
+
+/**
+ * Best count of legal card moves achievable by drawing from stock up to `maxDraws` times
+ * (opening positions often have no tableau play until waste has cards).
+ */
+export function dealMobilityEstimate(
+  state: GameState,
+  opts?: { maxDraws?: number; earlyExitAt?: number },
+): number {
+  const maxDraws = opts?.maxDraws ?? 24;
+  const earlyExitAt = opts?.earlyExitAt ?? 64;
+  let best = countLegalMoves(state);
+  if (best >= earlyExitAt) return best;
+  let s = state;
+  for (let d = 0; d < maxDraws && s.stock.length > 0; d++) {
+    const next = drawFromStock(s);
+    if (!next) break;
+    s = next;
+    best = Math.max(best, countLegalMoves(s));
+    if (best >= earlyExitAt) break;
+  }
+  return best;
+}
+
+/**
+ * Random deal, re-sampled until estimated mobility (including after stock draws) clears
+ * `minMoves`. Does not prove winnability.
+ */
+export function dealFairOpening(
+  rng: () => number,
+  opts?: { minMoves?: number; maxAttempts?: number },
+): GameState {
+  const minMoves = opts?.minMoves ?? 8;
+  const maxAttempts = opts?.maxAttempts ?? 80;
+  let last: GameState = applyAutoFoundationChain(dealNewGame(rng));
+  for (let i = 0; i < maxAttempts; i++) {
+    last = applyAutoFoundationChain(dealNewGame(rng));
+    if (dealMobilityEstimate(last) >= minMoves) return last;
+  }
+  return last;
+}

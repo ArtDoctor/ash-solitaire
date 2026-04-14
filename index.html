@@ -16,7 +16,6 @@
           type="button"
           id="btn-close-app"
           class="btn-close-app"
-          title="Close"
           aria-label="Close application"
         >
           ×
@@ -64,7 +63,7 @@
 
       <!-- Header bar -->
       <header class="game-header">
-        <button id="btn-menu" class="btn-control" title="Main Menu">
+        <button id="btn-menu" class="btn-control" type="button" aria-label="Main menu">
           <span class="icon">☰</span>
           <span class="label">Menu</span>
         </button>
@@ -76,7 +75,7 @@
             <span class="win-label">Wins</span>
             <span id="win-count" class="win-number">0</span>
           </div>
-          <button id="btn-restart" class="btn-control" title="Restart">
+          <button id="btn-restart" class="btn-control" type="button" aria-label="Restart game">
             <span class="icon">↺</span>
             <span class="label">Restart</span>
           </button>
@@ -88,10 +87,10 @@
 
         <!-- Left column: four foundations -->
         <aside class="foundations-col">
-          <div class="card-slot foundation" id="foundation-0" data-suit="♠" title="Spades foundation"></div>
-          <div class="card-slot foundation" id="foundation-1" data-suit="♥" title="Hearts foundation"></div>
-          <div class="card-slot foundation" id="foundation-2" data-suit="♦" title="Diamonds foundation"></div>
-          <div class="card-slot foundation" id="foundation-3" data-suit="♣" title="Clubs foundation"></div>
+          <div class="card-slot foundation" id="foundation-0" data-suit="♠" aria-label="Spades foundation"></div>
+          <div class="card-slot foundation" id="foundation-1" data-suit="♥" aria-label="Hearts foundation"></div>
+          <div class="card-slot foundation" id="foundation-2" data-suit="♦" aria-label="Diamonds foundation"></div>
+          <div class="card-slot foundation" id="foundation-3" data-suit="♣" aria-label="Clubs foundation"></div>
         </aside>
 
         <!-- Right: stock/waste row + tableau -->
@@ -99,8 +98,8 @@
 
           <!-- Stock / waste row -->
           <div class="stock-row">
-            <div class="card-slot stock-slot" id="stock" title="Stock pile"></div>
-            <div class="card-slot waste-slot" id="waste" title="Waste pile"></div>
+            <div class="card-slot stock-slot" id="stock" aria-label="Stock pile"></div>
+            <div class="card-slot waste-slot" id="waste" aria-label="Waste pile"></div>
           </div>
 
           <!-- Seven tableau columns -->

@@ -57,9 +57,28 @@ const PIP_LAYOUTS: Record<Exclude<Rank, "J" | "Q" | "K">, [number, number][]> = 
   "10": [[1, 1], [3, 1], [2, 2], [1, 3], [3, 3], [1, 5], [3, 5], [2, 6], [1, 7], [3, 7]],
 };
 
+const FACE_EMBLEMS: Record<"J" | "Q" | "K", string> = {
+  K: "♔",
+  Q: "♕",
+  J: "⚜",
+};
+
 function buildPips(card: CardData): string {
-  if (card.rank === "J" || card.rank === "Q" || card.rank === "K") {
-    return `<div class="card-face">${card.rank}</div>`;
+  if (card.rank === "K" || card.rank === "Q" || card.rank === "J") {
+    const emblem = FACE_EMBLEMS[card.rank];
+    return `<div class="card-face card-face--${card.rank}">
+      <span class="face-suit-bg">${card.suit}</span>
+      <span class="face-inner">
+        <span class="face-emblem">${emblem}</span>
+        <span class="face-rank">${card.rank}</span>
+      </span>
+    </div>`;
+  }
+
+  if (card.rank === "A") {
+    return `<div class="card-pips card-pips--ace">
+      <span class="pip">${card.suit}</span>
+    </div>`;
   }
 
   const positions = PIP_LAYOUTS[card.rank];
@@ -104,17 +123,30 @@ export function createCardEl(card: CardData): HTMLElement {
 
 // ─── Stock pile element ───────────────────────────────────────────────────────
 
+/** Max face-down backs drawn under the top card (rest implied by count badge). */
+const STOCK_VISUAL_UNDER_CAP = 14;
+
 export function createStockEl(count: number): HTMLElement {
   const el = document.createElement("div");
   el.className = "card-stock-pile";
   el.dataset.count = String(count);
 
-  el.innerHTML = `
-    <div class="stock-layer stock-layer--2"></div>
-    <div class="stock-layer stock-layer--1"></div>
-    <div class="stock-layer stock-layer--0 face-down"></div>
-    <span class="stock-count">${count}</span>
-  `;
+  const underCount = Math.max(0, Math.min(count - 1, STOCK_VISUAL_UNDER_CAP));
+  const parts: string[] = [];
+
+  for (let s = underCount; s >= 1; s--) {
+    const z = underCount - s + 1;
+    const alt = s % 2 === 0 ? " stock-layer-under--alt" : "";
+    parts.push(
+      `<div class="stock-layer stock-layer-under${alt}" style="top:calc(var(--card-h) * ${-(2 * s - 1)} / 110);left:calc(var(--card-w) * ${-s} / 78);z-index:${z}"></div>`,
+    );
+  }
+  parts.push(
+    `<div class="stock-layer stock-layer--0 face-down" style="z-index:${underCount + 1}"></div>`,
+  );
+  parts.push(`<span class="stock-count">${count}</span>`);
+
+  el.innerHTML = parts.join("");
   return el;
 }
 

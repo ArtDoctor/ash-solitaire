@@ -9,7 +9,7 @@ import {
   type CardData,
 } from "./cards.js";
 import {
-  dealNewGame,
+  dealFairOpening,
   drawFromStock,
   getDealSequence,
   isValidDescendingRun,
@@ -31,7 +31,7 @@ const HIDE_STATIONARY_DRAG_SOURCE_KEY = "solitaire-hide-stationary-drag-source";
 
 type ScreenId = "home" | "settings" | "game";
 
-let gameState: GameState = dealNewGame(Math.random);
+let gameState: GameState = dealFairOpening(Math.random);
 /** How many waste cards were just added by the most recent stock draw (for animation). */
 let lastDrawCount = 0;
 
@@ -47,6 +47,11 @@ type DealAnimState = {
 let dealAnim: DealAnimState | null = null;
 /** Blocks input while deal / fly / waste draw runs. */
 let animBusy = false;
+/**
+ * Bumped when a new deal/restart begins so in-flight animations stop mutating state
+ * and do not clear `animBusy` after being superseded.
+ */
+let animEpoch = 0;
 
 function setAnimBusy(busy: boolean): void {
   animBusy = busy;
@@ -56,6 +61,8 @@ function setAnimBusy(busy: boolean): void {
 const DRAG_START_PX = 6;
 /** Radius at which gravity toward a valid target starts to influence the ghost. */
 const GRAVITY_RADIUS_PX = 170;
+/** Pointer movement needed before gravity reaches full strength. */
+const GRAVITY_ARM_PX = 36;
 /** Below this pull value, we don't consider the target "engaged" (no preview). Same threshold on release so a highlighted drop commits. */
 const GRAVITY_PREVIEW_MIN = 0.12;
 
@@ -68,6 +75,8 @@ type DragSession = {
   grabEl: HTMLElement;
   /** Tableau run / single source — all dimmed while dragging */
   dimEls: HTMLElement[];
+  /** Pointer position when the drag began (gravity stays off until cursor moves away). */
+  dragOrigin: ScreenPoint;
   /** Offset from pointer to ghost top-left */
   offsetX: number;
   offsetY: number;
@@ -83,6 +92,9 @@ let dragPending: {
   grabEl: HTMLElement;
   grabIndex: number;
 } | null = null;
+
+/** Tracks face-down count per column to detect card flips between renders. */
+let prevFaceDownCounts: number[] = [0, 0, 0, 0, 0, 0, 0];
 
 let drag: DragSession | null = null;
 
@@ -245,34 +257,6 @@ function allMoveTargets(): MoveTarget[] {
   return t;
 }
 
-function anchorForTarget(target: MoveTarget): { x: number; y: number } | null {
-  if (target.kind === "foundation") {
-    const el = document.getElementById(`foundation-${target.pile}`);
-    if (!el) return null;
-    const r = el.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-  }
-  if (target.kind === "tableau") {
-    const col = document.getElementById(`tableau-${target.col}`);
-    if (!col) return null;
-    const cards = col.querySelectorAll<HTMLElement>(".card");
-    if (cards.length === 0) {
-      const r = col.getBoundingClientRect();
-      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-    }
-    const last = cards[cards.length - 1]!;
-    const r = last.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-  }
-  if (target.kind === "freeCell") {
-    const stock = document.getElementById("stock");
-    if (!stock) return null;
-    const r = stock.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-  }
-  return null;
-}
-
 function snapPositionForTarget(target: MoveTarget): { left: number; top: number } | null {
   const overlap = cssLengthVarPx("--col-overlap", "height");
 
@@ -301,6 +285,15 @@ function snapPositionForTarget(target: MoveTarget): { left: number; top: number 
   }
 
   return null;
+}
+
+function clamp01(v: number): number {
+  return Math.max(0, Math.min(1, v));
+}
+
+function smoothstep01(v: number): number {
+  const t = clamp01(v);
+  return t * t * (3 - 2 * t);
 }
 
 /** Target under pointer, if it's a legal drop — used to force-commit on release. */
@@ -339,41 +332,38 @@ type GravityHit = {
   snapTop: number;
 };
 
-/**
- * Returns the closest legal target the pointer is near, with a continuous
- * pull factor — closer pointer → stronger pull. Mirrors a "center of gravity"
- * feel: the card is drawn toward legal targets but the cursor can still pull
- * it back.
- */
+/** Pull the ghost toward the nearest legal snapped position without hard edges. */
 function findGravity(clientX: number, clientY: number, session: DragSession): GravityHit | null {
+  const freeLeft = clientX - session.offsetX;
+  const freeTop = clientY - session.offsetY;
+  const armDx = clientX - session.dragOrigin.x;
+  const armDy = clientY - session.dragOrigin.y;
+  const armDist = Math.hypot(armDx, armDy);
+  const armPull = smoothstep01(armDist / GRAVITY_ARM_PX);
+
   let bestD = Infinity;
-  let best: { target: MoveTarget; anchor: { x: number; y: number } } | null = null;
+  let best: { target: MoveTarget; snap: { left: number; top: number } } | null = null;
 
   for (const t of allMoveTargets()) {
     if (!tryApplyMove(gameState, session.source, t)) continue;
-    const a = anchorForTarget(t);
-    if (!a) continue;
-    const d = Math.hypot(clientX - a.x, clientY - a.y);
+    const snap = snapPositionForTarget(t);
+    if (!snap) continue;
+    const d = Math.hypot(snap.left - freeLeft, snap.top - freeTop);
     if (d < bestD) {
       bestD = d;
-      best = { target: t, anchor: a };
+      best = { target: t, snap };
     }
   }
 
   if (!best || bestD >= GRAVITY_RADIUS_PX) return null;
-
-  const snap = snapPositionForTarget(best.target);
-  if (!snap) return null;
-
-  // Smooth falloff: 1 at d=0, 0 at d=radius. Cubic ease for a "basin" feel.
-  const t = 1 - bestD / GRAVITY_RADIUS_PX;
-  const pull = t * t * (3 - 2 * t); // smoothstep
+  const pull = smoothstep01(1 - bestD / GRAVITY_RADIUS_PX) * armPull;
+  if (pull <= 0) return null;
 
   return {
     target: best.target,
     pull,
-    snapLeft: snap.left,
-    snapTop: snap.top,
+    snapLeft: best.snap.left,
+    snapTop: best.snap.top,
   };
 }
 
@@ -440,6 +430,7 @@ function startDragFromPending(): DragSession | null {
     ghost,
     grabEl,
     dimEls,
+    dragOrigin: start,
     offsetX,
     offsetY,
     grabIndex,
@@ -536,29 +527,25 @@ function startDragFromPending(): DragSession | null {
 
     if (didMove && committedTarget && dropFromRects) {
       setAnimBusy(true);
+      const dropEpoch = animEpoch;
       void (async () => {
         try {
           await flyPlayerMoveToDestination(current.cards, dropFromRects, committedTarget);
-          await runAutoFoundationChainAnimation();
+          if (dropEpoch !== animEpoch) return;
+          await runAutoFoundationChainAnimation(dropEpoch);
+          if (dropEpoch !== animEpoch) return;
           checkWin();
         } finally {
-          setAnimBusy(false);
+          if (dropEpoch === animEpoch) setAnimBusy(false);
         }
       })();
     } else if (reboundFromRects) {
-      setAnimBusy(true);
-      void (async () => {
-        try {
-          await flyPlayerMoveToSource(
-            current.cards,
-            reboundFromRects,
-            current.source,
-            reboundGhost,
-          );
-        } finally {
-          setAnimBusy(false);
-        }
-      })();
+      void flyPlayerMoveToSource(
+        current.cards,
+        reboundFromRects,
+        current.source,
+        reboundGhost,
+      );
     }
   };
 
@@ -751,9 +738,14 @@ async function flyPlayerMoveToDestination(
   void dest[0]!.offsetHeight;
   const toRects = dest.map((el) => toRect(el.getBoundingClientRect()));
 
+  const rippleColor =
+    target.kind === "foundation"
+      ? "rgba(110,168,255,0.9)"
+      : "rgba(255,255,255,0.6)";
+
   try {
     await Promise.all(
-      cards.map((card, i) => flyCard(card, fromRects[i]!, toRects[i]!, FLY_MS_PLAYER_MOVE)),
+      cards.map((card, i) => flyCard(card, fromRects[i]!, toRects[i]!, FLY_MS_PLAYER_MOVE, rippleColor)),
     );
   } finally {
     dest.forEach((el) => el.classList.remove("card--auto-flight-source"));
@@ -786,7 +778,30 @@ async function flyPlayerMoveToSource(
   }
 }
 
-function flyCard(card: CardData, from: Rect, to: Rect, durationMs: number): Promise<void> {
+function spawnStockBurst(rect: Rect): void {
+  const el = document.createElement("div");
+  el.className = "stock-burst";
+  el.style.left = `${rect.left}px`;
+  el.style.top = `${rect.top}px`;
+  el.style.width = `${rect.width}px`;
+  el.style.height = `${rect.height}px`;
+  document.body.appendChild(el);
+  el.addEventListener("animationend", () => el.remove(), { once: true });
+}
+
+function spawnDropRipple(rect: Rect, color: string): void {
+  const el = document.createElement("div");
+  el.className = "drop-ripple";
+  el.style.left = `${rect.left}px`;
+  el.style.top = `${rect.top}px`;
+  el.style.width = `${rect.width}px`;
+  el.style.height = `${rect.height}px`;
+  el.style.borderColor = color;
+  document.body.appendChild(el);
+  el.addEventListener("animationend", () => el.remove(), { once: true });
+}
+
+function flyCard(card: CardData, from: Rect, to: Rect, durationMs: number, rippleColor?: string): Promise<void> {
   const ghost = createCardEl(card);
   ghost.classList.add("card-flight-ghost");
   ghost.style.left = `${from.left}px`;
@@ -810,14 +825,11 @@ function flyCard(card: CardData, from: Rect, to: Rect, durationMs: number): Prom
       if (settled) return;
       settled = true;
       ghost.remove();
+      if (rippleColor) spawnDropRipple(to, rippleColor);
       resolve();
     };
-    const onEnd = (e: TransitionEvent): void => {
-      if (e.propertyName !== "left") return;
-      done();
-    };
-    ghost.addEventListener("transitionend", onEnd);
-    window.setTimeout(done, durationMs + 120);
+    ghost.addEventListener("transitionend", done, { once: true });
+    window.setTimeout(done, durationMs + 400);
   });
 }
 
@@ -844,8 +856,9 @@ function getRenderSnapshot(): { view: GameState; stockCount: number } {
   return { view: gameState, stockCount: gameState.stock.length };
 }
 
-async function runAutoFoundationChainAnimation(): Promise<void> {
+async function runAutoFoundationChainAnimation(expectedEpoch: number): Promise<void> {
   for (;;) {
+    if (expectedEpoch !== animEpoch) return;
     const next = peekNextAutoFoundationMove(gameState);
     if (!next || next.target.kind !== "foundation") break;
     const card = peekMovingCards(gameState, next.source)?.[0];
@@ -862,7 +875,11 @@ async function runAutoFoundationChainAnimation(): Promise<void> {
     const sourceEl = elementForMoveSource(next.source);
     sourceEl?.classList.add("card--auto-flight-source");
     void sourceEl?.offsetHeight;
-    await flyCard(card, from, to, FLY_MS_FOUNDATION);
+    await flyCard(card, from, to, FLY_MS_FOUNDATION, "rgba(110,168,255,0.9)");
+    if (expectedEpoch !== animEpoch) {
+      sourceEl?.classList.remove("card--auto-flight-source");
+      return;
+    }
     const applied = tryApplyMove(gameState, next.source, next.target);
     if (!applied) {
       sourceEl?.classList.remove("card--auto-flight-source");
@@ -873,29 +890,37 @@ async function runAutoFoundationChainAnimation(): Promise<void> {
   }
 }
 
-async function runDealSequenceAnimation(full: GameState): Promise<void> {
+async function runDealSequenceAnimation(
+  full: GameState,
+  myEpoch: number,
+): Promise<void> {
   const seq = getDealSequence(full);
   dealAnim = { full, seq, k: 0 };
   setAnimBusy(true);
   try {
+    if (myEpoch !== animEpoch) return;
     renderGame();
     for (let step = 0; step < DEAL_STEPS; step++) {
+      if (myEpoch !== animEpoch) return;
       const { col, card } = seq[step]!;
       const depth = partialTableauAfterDealSteps(seq, step)[col]!.length;
       const from = stockPileRect();
       const to = tableauSlotRect(col, depth);
       if (!from || !to) break;
       await flyCard(card, from, to, FLY_MS_DEAL);
+      if (myEpoch !== animEpoch) return;
       dealAnim.k = step + 1;
       renderGame();
     }
+    if (myEpoch !== animEpoch) return;
     gameState = full;
     dealAnim = null;
     renderGame();
-    await runAutoFoundationChainAnimation();
+    await runAutoFoundationChainAnimation(myEpoch);
+    if (myEpoch !== animEpoch) return;
     checkWin();
   } finally {
-    setAnimBusy(false);
+    if (myEpoch === animEpoch) setAnimBusy(false);
   }
 }
 
@@ -953,7 +978,7 @@ function renderStockAndFreeCell(view: GameState, stockCount: number): void {
   } else {
     const placeholder = document.createElement("div");
     placeholder.className = "free-cell-empty";
-    placeholder.title = "Free cell";
+    placeholder.setAttribute("aria-label", "Free cell");
     stockSlot.appendChild(placeholder);
   }
 }
@@ -1073,19 +1098,51 @@ function beginPossibleDrag(
 
 function renderGame(): void {
   const { view, stockCount } = getRenderSnapshot();
+  const newFaceDownCounts = view.tableau.map((col) => col.filter((c) => c.faceDown).length);
+
   renderFoundations(view);
   renderStockAndFreeCell(view, stockCount);
   renderWaste(view);
   renderTableau(view);
+
+  // Animate newly revealed cards — skip during the initial deal to avoid spamming
+  if (!dealAnim) {
+    for (let c = 0; c < 7; c++) {
+      const prev = prevFaceDownCounts[c]!;
+      const next = newFaceDownCounts[c]!;
+      if (prev > next) {
+        const colEl = document.getElementById(`tableau-${c}`);
+        const allCards = colEl?.querySelectorAll<HTMLElement>(".card");
+        // The card at index `next` is the one that just flipped face-up
+        if (allCards && allCards.length > next && next >= 0) {
+          const revealed = allCards[next]!;
+          revealed.classList.remove("card-flip-reveal");
+          void revealed.offsetWidth;
+          revealed.classList.add("card-flip-reveal");
+          revealed.addEventListener("animationend", () => revealed.classList.remove("card-flip-reveal"), { once: true });
+        }
+      }
+    }
+  }
+
+  prevFaceDownCounts = newFaceDownCounts;
 }
 
 // ─── Input ────────────────────────────────────────────────────────────────────
 
 async function onStockClick(): Promise<void> {
   if (animBusy) return;
+  const stockEpoch = animEpoch;
   const beforeWaste = gameState.waste.length;
   const drawn = drawFromStock(gameState);
   if (!drawn) return;
+
+  const stockEl = document.getElementById("stock");
+  if (stockEl) {
+    const r = stockEl.getBoundingClientRect();
+    spawnStockBurst({ left: r.left, top: r.top, width: r.width, height: r.height });
+  }
+
   lastDrawCount = drawn.waste.length - beforeWaste;
   gameState = drawn;
   checkWin();
@@ -1094,17 +1151,20 @@ async function onStockClick(): Promise<void> {
   setAnimBusy(true);
   try {
     await waitWasteDrawAnimation(lastDrawCount);
+    if (stockEpoch !== animEpoch) return;
     lastDrawCount = 0;
     renderGame();
-    await runAutoFoundationChainAnimation();
+    await runAutoFoundationChainAnimation(stockEpoch);
+    if (stockEpoch !== animEpoch) return;
     checkWin();
   } finally {
-    setAnimBusy(false);
+    if (stockEpoch === animEpoch) setAnimBusy(false);
   }
 }
 
 async function onWasteDoubleClick(): Promise<void> {
   if (animBusy) return;
+  const opEpoch = animEpoch;
   const next = tryDoubleClickFoundation(gameState, { kind: "waste" });
   if (!next) return;
   gameState = next;
@@ -1112,15 +1172,17 @@ async function onWasteDoubleClick(): Promise<void> {
   renderGame();
   setAnimBusy(true);
   try {
-    await runAutoFoundationChainAnimation();
+    await runAutoFoundationChainAnimation(opEpoch);
+    if (opEpoch !== animEpoch) return;
     checkWin();
   } finally {
-    setAnimBusy(false);
+    if (opEpoch === animEpoch) setAnimBusy(false);
   }
 }
 
 async function onFreeCellDoubleClick(): Promise<void> {
   if (animBusy) return;
+  const opEpoch = animEpoch;
   const next = tryDoubleClickFoundation(gameState, { kind: "freeCell" });
   if (!next) return;
   gameState = next;
@@ -1128,15 +1190,17 @@ async function onFreeCellDoubleClick(): Promise<void> {
   renderGame();
   setAnimBusy(true);
   try {
-    await runAutoFoundationChainAnimation();
+    await runAutoFoundationChainAnimation(opEpoch);
+    if (opEpoch !== animEpoch) return;
     checkWin();
   } finally {
-    setAnimBusy(false);
+    if (opEpoch === animEpoch) setAnimBusy(false);
   }
 }
 
 async function onTableauDoubleClick(col: number, idx: number): Promise<void> {
   if (animBusy) return;
+  const opEpoch = animEpoch;
   const next = tryDoubleClickFoundation(gameState, {
     kind: "tableau",
     col,
@@ -1148,18 +1212,21 @@ async function onTableauDoubleClick(col: number, idx: number): Promise<void> {
   renderGame();
   setAnimBusy(true);
   try {
-    await runAutoFoundationChainAnimation();
+    await runAutoFoundationChainAnimation(opEpoch);
+    if (opEpoch !== animEpoch) return;
     checkWin();
   } finally {
-    setAnimBusy(false);
+    if (opEpoch === animEpoch) setAnimBusy(false);
   }
 }
 
 async function dealAndRender(): Promise<void> {
-  if (animBusy) return;
   endDrag();
   clearPendingDrag();
-  await runDealSequenceAnimation(dealNewGame(Math.random));
+  animEpoch++;
+  const myEpoch = animEpoch;
+  const full = dealFairOpening(Math.random);
+  await runDealSequenceAnimation(full, myEpoch);
 }
 
 // ─── Game lifecycle ───────────────────────────────────────────────────────────

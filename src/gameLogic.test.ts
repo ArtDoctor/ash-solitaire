@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   applyAutoFoundationChain,
   canMoveToFoundationPile,
+  countLegalMoves,
   createDeck,
+  dealFairOpening,
+  dealMobilityEstimate,
   dealNewGame,
   drawFromStock,
   freshGame,
@@ -158,6 +161,20 @@ describe("win detection", () => {
       freeCell: null,
     };
     expect(isWon(g)).toBe(true);
+  });
+});
+
+describe("countLegalMoves", () => {
+  it("is positive on a typical fresh game", () => {
+    const g = freshGame(mulberry32(42));
+    expect(countLegalMoves(g)).toBeGreaterThan(0);
+  });
+});
+
+describe("dealFairOpening", () => {
+  it("meets a minimum mobility threshold when possible within attempts", () => {
+    const g = dealFairOpening(mulberry32(999), { minMoves: 12, maxAttempts: 120 });
+    expect(dealMobilityEstimate(g)).toBeGreaterThanOrEqual(12);
   });
 });
 

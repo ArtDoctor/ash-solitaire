@@ -5,8 +5,10 @@ import { expect, test } from "@playwright/test";
  * Run: npm run test:e2e — Playwright builds, serves `vite preview` on 127.0.0.1:4173.
  */
 
+/** Deal + post-deal auto-foundation animations set `body.anim-busy` (see `setAnimBusy` in main). */
 async function waitForDealComplete(page: import("@playwright/test").Page): Promise<void> {
-  await expect(page.locator("#tableau-6 .card")).toHaveCount(7, { timeout: 45_000 });
+  await expect(page.locator("body")).toHaveClass(/anim-busy/, { timeout: 15_000 });
+  await expect(page.locator("body")).not.toHaveClass(/anim-busy/, { timeout: 60_000 });
 }
 
 async function tableauSignature(page: import("@playwright/test").Page): Promise<string> {
