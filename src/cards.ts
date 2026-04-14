@@ -1,6 +1,5 @@
 // ── Card types & DOM factory ──────────────────────────────────────────────────
-// Pure presentation layer — no game logic.  Part 2 will import these types
-// and call createCardEl() to render actual game state.
+// Pure presentation layer — no game logic.
 
 export type Suit = "♠" | "♥" | "♦" | "♣";
 export type Rank =
@@ -41,15 +40,39 @@ export interface CardData {
   faceDown?: boolean;
 }
 
-// ─── Face-up card element ──────────────────────────────────────────────────────
-//
-//  ┌──────────┐
-//  │ A        │   ← .card-corner.tl  (rank + suit, stacked)
-//  │ ♥        │
-//  │    ♥     │   ← .card-pip        (large centre symbol)
-//  │        A │
-//  │        ♥ │   ← .card-corner.br  (same, rotated 180°)
-//  └──────────┘
+// ─── Pip layouts ──────────────────────────────────────────────────────────────
+// Classic playing-card pip arrangements on a 3-column × 7-row grid.
+// [col, row] — col 1-3, row 1-7. Row 4 is centre line; rows 5-7 are flipped 180°.
+
+const PIP_LAYOUTS: Record<Exclude<Rank, "J" | "Q" | "K">, [number, number][]> = {
+  A:  [[2, 4]],
+  "2":  [[2, 1], [2, 7]],
+  "3":  [[2, 1], [2, 4], [2, 7]],
+  "4":  [[1, 1], [3, 1], [1, 7], [3, 7]],
+  "5":  [[1, 1], [3, 1], [2, 4], [1, 7], [3, 7]],
+  "6":  [[1, 1], [3, 1], [1, 4], [3, 4], [1, 7], [3, 7]],
+  "7":  [[1, 1], [3, 1], [2, 2], [1, 4], [3, 4], [1, 7], [3, 7]],
+  "8":  [[1, 1], [3, 1], [2, 2], [1, 4], [3, 4], [2, 6], [1, 7], [3, 7]],
+  "9":  [[1, 1], [3, 1], [1, 3], [3, 3], [2, 4], [1, 5], [3, 5], [1, 7], [3, 7]],
+  "10": [[1, 1], [3, 1], [2, 2], [1, 3], [3, 3], [1, 5], [3, 5], [2, 6], [1, 7], [3, 7]],
+};
+
+function buildPips(card: CardData): string {
+  if (card.rank === "J" || card.rank === "Q" || card.rank === "K") {
+    return `<div class="card-face">${card.rank}</div>`;
+  }
+
+  const positions = PIP_LAYOUTS[card.rank];
+  const pips = positions
+    .map(([col, row]) => {
+      const flip = row > 4 ? " pip--flip" : "";
+      return `<span class="pip${flip}" style="grid-column:${col};grid-row:${row};">${card.suit}</span>`;
+    })
+    .join("");
+  return `<div class="card-pips">${pips}</div>`;
+}
+
+// ─── Face-up card element ─────────────────────────────────────────────────────
 
 export function createCardEl(card: CardData): HTMLElement {
   const el = document.createElement("div");
@@ -72,22 +95,20 @@ export function createCardEl(card: CardData): HTMLElement {
 
   el.innerHTML = `
     ${corner("card-corner--tl")}
-    <div class="card-pip">${card.suit}</div>
+    ${buildPips(card)}
     ${corner("card-corner--br")}
   `;
 
   return el;
 }
 
-// ─── Stock pile element (face-down stack indicator) ───────────────────────────
-// Shows a layered back-card look to imply a pile of cards.
+// ─── Stock pile element ───────────────────────────────────────────────────────
 
 export function createStockEl(count: number): HTMLElement {
   const el = document.createElement("div");
   el.className = "card-stock-pile";
   el.dataset.count = String(count);
 
-  // Two shadow layers + top card back
   el.innerHTML = `
     <div class="stock-layer stock-layer--2"></div>
     <div class="stock-layer stock-layer--1"></div>
@@ -98,17 +119,15 @@ export function createStockEl(count: number): HTMLElement {
 }
 
 // ─── Waste fan element ────────────────────────────────────────────────────────
-// Shows up to the top 3 waste cards slightly fanned so the player can see
-// what has just been drawn. Only the top card is interactive.
 
-export function createWasteFanEl(top3: CardData[]): HTMLElement {
+export function createWasteFanEl(cards: CardData[]): HTMLElement {
   const el = document.createElement("div");
   el.className = "waste-fan";
 
-  top3.forEach((card, i) => {
+  cards.forEach((card, i) => {
     const cardEl = createCardEl(card);
     cardEl.classList.add("waste-card");
-    if (i < top3.length - 1) cardEl.classList.add("waste-card--under");
+    if (i < cards.length - 1) cardEl.classList.add("waste-card--under");
     el.appendChild(cardEl);
   });
 
@@ -116,10 +135,35 @@ export function createWasteFanEl(top3: CardData[]): HTMLElement {
 }
 
 // ─── Tableau column renderer ──────────────────────────────────────────────────
-// Positions cards in a column with a fixed vertical overlap.
-// Returns the minimum height the column container needs.
 
-export const COL_OVERLAP = 30; // px; keep in sync with CSS --col-overlap
+/**
+ * Resolved pixel length for a `--*` custom property. `getPropertyValue` often
+ * returns unresolved `calc(...)` strings, so `parseFloat` is unreliable.
+ */
+export function cssLengthVarPx(
+  varName: string,
+  axis: "width" | "height",
+): number {
+  const probe = document.createElement("div");
+  const primary = axis === "width" ? "width" : "height";
+  const secondary = axis === "width" ? "height" : "width";
+  probe.style.cssText = [
+    "position:fixed",
+    "left:0",
+    "top:0",
+    "margin:0",
+    "padding:0",
+    "border:0",
+    "visibility:hidden",
+    "pointer-events:none",
+    `${primary}:var(${varName})`,
+    `${secondary}:0`,
+  ].join(";");
+  document.body.appendChild(probe);
+  const px = axis === "width" ? probe.offsetWidth : probe.offsetHeight;
+  probe.remove();
+  return Number.isFinite(px) ? px : 0;
+}
 
 export function renderTableauCol(
   colEl: HTMLElement,
@@ -129,20 +173,16 @@ export function renderTableauCol(
 
   if (cards.length === 0) return;
 
+  const overlap = cssLengthVarPx("--col-overlap", "height");
+  const cardH = cssLengthVarPx("--card-h", "height");
+
   cards.forEach((card, i) => {
     const cardEl = createCardEl(card);
-    cardEl.style.top = `${i * COL_OVERLAP}px`;
+    cardEl.style.top = `${i * overlap}px`;
+    cardEl.style.zIndex = String(i + 1);
     colEl.appendChild(cardEl);
   });
 
-  // Stretch the container so the last card fully shows
-  const totalH =
-    (cards.length - 1) * COL_OVERLAP +
-    parseInt(
-      getComputedStyle(document.documentElement)
-        .getPropertyValue("--card-h")
-        .trim(),
-      10,
-    );
+  const totalH = (cards.length - 1) * overlap + cardH;
   colEl.style.minHeight = `${totalH}px`;
 }

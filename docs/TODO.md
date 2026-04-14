@@ -15,33 +15,37 @@ Working checklist derived from `docs/REQUIREMENTS.md`. Check items off as you co
 
 ## 1. App shell & navigation
 
-- [ ] **Home screen:** first route/view after launch; single entry → solitaire game.
-- [ ] **Game screen:** tableau, foundations, stock/waste, post-deck free cell region, win count, controls.
-- [ ] **Restart** — new shuffle, same rules (confirm modal optional).
-- [ ] **Main menu** — return to home without exiting the app.
-- [ ] Dark-mode styling by default; layout aligned with reference shots (left foundations, top stock/waste).
+- [x] **Home screen:** first route/view after launch; single entry → solitaire game.
+- [x] **Game screen:** tableau, foundations, stock/waste, post-deck free cell region, win count, controls.
+- [x] **Restart** — new shuffle, same rules (confirm modal optional).
+- [x] **Main menu** — return to home without exiting the app.
+- [x] Dark-mode styling by default; layout aligned with reference shots (left foundations, top stock/waste).
 
 ---
 
 ## 2. Game rules (logic)
 
-- [ ] Deck: 52 cards, shuffle per new game.
-- [ ] Deal tableau **1…7** face-up; four foundations (Ace→King by suit).
-- [ ] Tableau: build down, alternating colors; move only top card or valid top sequence.
-- [ ] Empty tableau: **any** card (or allowed sequence) may start the column.
-- [ ] Stock: draw **3** per click; **only waste top** playable; **single pass** (no restock).
-- [ ] When stock empty: **stock slot becomes a free cell** (any single card per rules doc).
-- [ ] Win detection: all cards on foundations.
-- [ ] Foundation **auto-move** + sensible shortcuts (e.g. double-click to foundation, optional chain).
+- [x] Deck: 52 cards, shuffle per new game.
+- [x] Deal tableau **1…7** face-up; four foundations (Ace→King by suit).
+- [x] Tableau: build down, alternating colors; move only top card or valid top sequence.
+- [x] Empty tableau: **any** card (or allowed sequence) may start the column.
+- [x] Stock: draw **3** per click; **only waste top** playable; **single pass** (no restock).
+- [x] When stock empty: **stock slot becomes a free cell** (any single card per rules doc).
+- [x] Win detection: all cards on foundations.
+- [x] Foundation **auto-move** + sensible shortcuts (e.g. double-click to foundation, optional chain).
 
 ---
 
 ## 3. UX, animation, persistence
 
-- [ ] Smooth card motion (CSS transforms / FLIP / small library — keep bundle light).
-- [ ] Illegal-move feedback; legal targets readable.
-- [ ] **Win count** — display + persist (Tauri store or local file / `localStorage` with fallback).
-- [ ] Win celebration state (subtle animation enough for v1).
+- [x] Smooth card motion (CSS transforms / FLIP / small library — keep bundle light).
+- [x] Illegal-move feedback; legal targets readable.
+- [ ] Main screen animations: cards moving from the dack into main part, cards moving from deck to the left panel when there is automated moving, etc.
+- [x] Animations when drawing 3 cards.
+- [x] **Win count** — display + persist (Tauri store or local file / `localStorage` with fallback).
+- [x] Win celebration state (subtle animation enough for v1).
+- [x] Gravity-assisted drag: ghost is smoothly drawn toward legal targets when
+      the pointer is nearby, but still tracks the cursor — no hard jump/snap.
 
 ---
 
@@ -49,8 +53,8 @@ Working checklist derived from `docs/REQUIREMENTS.md`. Check items off as you co
 
 ### 4.1 Unit / module tests (optional but valuable)
 
-- [ ] Add **Vitest** (or **Node test** runner) for pure TS: deck shuffle, move legality, win detection.
-- [ ] Cover edge cases: last stock draw with fewer than 3 cards, empty stock + waste behavior, free cell rules.
+- [x] Add **Vitest** (or **Node test** runner) for pure TS: deck shuffle, move legality, win detection.
+- [x] Cover edge cases: last stock draw with fewer than 3 cards, empty stock + waste behavior, free cell rules.
 
 ### 4.2 End-to-end (Playwright)
 
@@ -60,10 +64,6 @@ Working checklist derived from `docs/REQUIREMENTS.md`. Check items off as you co
 - [ ] Interaction: draw from stock → waste shows draw-three behavior; only top waste card draggable/clickable per spec.
 - [ ] Navigation: game → main menu → home; restart starts new layout (deterministic seed optional for CI).
 - [ ] Optional: screenshot snapshot for critical screens (dark theme) if flakiness is manageable.
-
-### 4.3 CI (optional)
-
-- [ ] GitHub Actions (or other): install deps, `npm run build`, unit tests, Playwright e2e against built static site or dev server.
 
 ---
 

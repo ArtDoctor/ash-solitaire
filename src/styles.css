@@ -1,28 +1,43 @@
 /* ================================================================
-   Design tokens
+   Design tokens — minimalist, flat
    ================================================================ */
 :root {
-  --bg:           #0d1117;
-  --surface:      #161b22;
-  --surface-2:    #21262d;
-  --border:       #30363d;
-  --border-subtle:#21262d;
-  --accent:       #388bfd;
-  --accent-hover: #58a6ff;
+  --bg:           #1b1f24;
+  --surface:      #1f2429;
+  --surface-2:    #262b31;
+  --border:       #3a4048;
+  --border-subtle:#2d333b;
+  --accent:       #6ea8ff;
+  --accent-hover: #8fbcff;
   --text:         #e6edf3;
   --text-muted:   #8b949e;
-  --red:          #ff6b6b;
-  --black-card:   #e6edf3;
 
-  --card-w:       74px;
-  --card-h:       104px;
-  --card-radius:  8px;
+  /* Cards: one bg, one fg per colour — dark mode */
+  --card-bg:      #14181d;   /* dark card face */
+  --card-border:  #e6edf3;   /* strong light outline */
+  --card-red:     #ff5c5c;
+  --card-black:   #e6edf3;
+  --card-back:    #2a3340;
+  --card-back-2:  #3a4656;
+
+  --header-h:     52px;
+
+  /* Fit seven columns into the play area; extra viewport width → side margins, not gaps */
+  --play-pad-x:   16px;
+  /* Reserve base sidebar width for tableau math (avoid circular --sidebar-w / --card-w) */
+  --layout-fixed: calc(104px + 2 * var(--play-pad-x));
   --card-gap:     10px;
-  --col-overlap:  30px;      /* how much each stacked card peeks out */
-
-  --header-h:     54px;
-  --sidebar-w:    100px;
-  --transition:   200ms ease;
+  --card-w: clamp(
+    58px,
+    calc((100vw - var(--layout-fixed) - 6 * var(--card-gap)) / 7),
+    108px
+  );
+  --card-h:       calc(var(--card-w) * 110 / 78);
+  --card-radius:  calc(var(--card-w) * 6 / 78);
+  --col-overlap:  calc(var(--card-h) * 30 / 110);
+  /* Grow with cards so foundation slots are not narrower than a card */
+  --sidebar-w:    max(104px, calc(var(--card-w) + 28px));
+  --transition:   160ms ease;
 }
 
 /* ================================================================
@@ -46,7 +61,7 @@ html, body {
 }
 
 /* ================================================================
-   Screens & transitions
+   Screens
    ================================================================ */
 .screen {
   position: fixed;
@@ -55,7 +70,7 @@ html, body {
   flex-direction: column;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 280ms ease;
+  transition: opacity 240ms ease;
 }
 
 .screen.active {
@@ -69,8 +84,7 @@ html, body {
 #screen-home {
   align-items: center;
   justify-content: center;
-  background:
-    radial-gradient(ellipse 80% 60% at 50% 40%, #1a2540 0%, var(--bg) 70%);
+  background: var(--bg);
 }
 
 .home-content {
@@ -82,31 +96,119 @@ html, body {
 
 .home-logo {
   display: flex;
-  gap: 12px;
-  font-size: 36px;
+  gap: 14px;
+  font-size: 34px;
   line-height: 1;
-  filter: drop-shadow(0 2px 8px rgba(0,0,0,.6));
 }
 
-.suit-icon { display: inline-block; }
-.suit-hearts   { color: var(--red); }
-.suit-diamonds { color: var(--red); }
-.suit-spades   { color: var(--black-card); }
-.suit-clubs    { color: var(--black-card); }
+.suit-icon        { display: inline-block; }
+.suit-hearts,
+.suit-diamonds    { color: var(--card-red); }
+.suit-spades,
+.suit-clubs       { color: var(--text); }
 
 .home-title {
-  font-size: 52px;
-  font-weight: 700;
+  font-size: 48px;
+  font-weight: 600;
   letter-spacing: -1px;
   color: var(--text);
-  text-shadow: 0 2px 16px rgba(0,0,0,.5);
 }
 
 .home-subtitle {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-muted);
-  letter-spacing: .5px;
+  letter-spacing: .8px;
   text-transform: uppercase;
+}
+
+.shell-top {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 10px 12px;
+  pointer-events: none;
+}
+
+.shell-top > * {
+  pointer-events: auto;
+}
+
+.btn-close-app {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition), border-color var(--transition);
+}
+
+.btn-close-app:hover {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+#screen-settings {
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+
+.settings-panel {
+  width: min(400px, calc(100vw - 48px));
+  padding: 28px 24px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings-title {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+
+.settings-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.settings-row input {
+  margin-top: 3px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.settings-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.settings-panel .btn-primary {
+  margin-top: 8px;
+  align-self: flex-start;
 }
 
 /* ================================================================
@@ -114,62 +216,73 @@ html, body {
    ================================================================ */
 .btn-primary {
   margin-top: 8px;
-  padding: 14px 52px;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: .3px;
+  padding: 12px 48px;
+  background: transparent;
+  color: var(--text);
+  border: 1.5px solid var(--text);
+  border-radius: 4px;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: .4px;
   cursor: pointer;
-  transition: background var(--transition), transform var(--transition),
-              box-shadow var(--transition);
-  box-shadow: 0 4px 16px rgba(56,139,253,.35);
+  transition: background var(--transition), color var(--transition);
 }
 
 .btn-primary:hover {
-  background: var(--accent-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(88,166,255,.45);
+  background: var(--text);
+  color: var(--bg);
 }
 
-.btn-primary:active {
-  transform: translateY(0);
+.btn-secondary {
+  margin-top: 0;
+  padding: 10px 32px;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition), border-color var(--transition);
+}
+
+.btn-secondary:hover {
+  color: var(--text);
+  border-color: var(--border);
+  background: var(--surface-2);
 }
 
 .btn-control {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   padding: 6px 12px;
-  background: var(--surface-2);
+  background: transparent;
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 4px;
   font-size: 13px;
   cursor: pointer;
   transition: background var(--transition), border-color var(--transition);
 }
 
 .btn-control:hover {
-  background: var(--border);
+  background: var(--surface-2);
   border-color: var(--text-muted);
 }
 
 .btn-control .icon {
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1;
 }
 
 /* ================================================================
-   GAME SCREEN layout
+   GAME SCREEN
    ================================================================ */
 #screen-game {
   background: var(--bg);
 }
 
-/* Header */
 .game-header {
   flex-shrink: 0;
   height: var(--header-h);
@@ -178,14 +291,14 @@ html, body {
   justify-content: space-between;
   padding: 0 16px;
   background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .header-title {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 500;
   color: var(--text-muted);
-  letter-spacing: .3px;
+  letter-spacing: .4px;
 }
 
 .header-right {
@@ -209,19 +322,17 @@ html, body {
 }
 
 .win-number {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--accent-hover);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
 }
 
-/* Game area: sidebar + main */
 .game-area {
   flex: 1;
   display: flex;
   overflow: hidden;
 }
 
-/* Foundations sidebar */
 .foundations-col {
   flex-shrink: 0;
   width: var(--sidebar-w);
@@ -229,54 +340,61 @@ html, body {
   flex-direction: column;
   align-items: center;
   gap: var(--card-gap);
-  padding: 16px 12px;
+  padding: 16px max(12px, calc((var(--sidebar-w) - var(--card-w)) / 2));
   background: var(--surface);
-  border-right: 1px solid var(--border);
+  border-right: 1px solid var(--border-subtle);
   overflow-y: auto;
+  box-sizing: border-box;
 }
 
-/* Play area */
 .play-area {
   flex: 1;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 16px;
-  padding: 16px;
+  padding: var(--play-pad-x);
+  overflow-x: auto;
   overflow-y: auto;
+  min-width: 0;
 }
 
-/* Stock / waste row */
 .stock-row {
   display: flex;
   gap: var(--card-gap);
   flex-shrink: 0;
+  align-items: flex-start;
+  min-width: calc(7 * var(--card-w) + 6 * var(--card-gap));
+  width: max-content;
 }
 
-/* Tableau row */
 .tableau {
   flex: 1;
   display: flex;
   gap: var(--card-gap);
   align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+  min-height: 0;
 }
 
 .tableau-col {
-  flex: 1;
+  flex: 0 0 var(--card-w);
   min-width: var(--card-w);
   min-height: var(--card-h);
   position: relative;
 }
 
 /* ================================================================
-   Card slots (empty placeholders)
+   Empty slot placeholders
    ================================================================ */
 .card-slot,
 .tableau-col {
   width: var(--card-w);
   height: var(--card-h);
-  border: 2px dashed var(--border);
+  border: 1.5px dashed var(--border);
   border-radius: var(--card-radius);
-  background: var(--surface-2);
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -285,176 +403,231 @@ html, body {
 
 .card-slot.foundation::after {
   content: attr(data-suit);
-  font-size: 26px;
+  font-size: calc(var(--card-w) * 28 / 78);
   color: var(--border);
   pointer-events: none;
 }
 
 .card-slot.stock-slot::after {
-  content: "🂠";
-  font-size: 32px;
-  opacity: .25;
+  content: "↻";
+  font-size: calc(var(--card-w) * 24 / 78);
+  color: var(--border);
   pointer-events: none;
 }
 
-.card-slot.waste-slot::after {
-  content: "";
+.card-slot.stock-slot.stock-slot--free-cell::after {
+  content: none;
 }
 
-/* Highlight drop targets */
+.free-cell-empty {
+  width: var(--card-w);
+  height: var(--card-h);
+  border-radius: var(--card-radius);
+  border: 1.5px dashed var(--border);
+  box-sizing: border-box;
+}
+
+.card-slot.waste-slot {
+  flex-shrink: 0;
+}
+
+.card-slot.waste-slot::after { content: ""; }
+
 .card-slot.drop-target,
 .tableau-col.drop-target {
   border-color: var(--accent);
-  background: rgba(56,139,253,.08);
+  border-style: solid;
+  background: rgba(110,168,255,.06);
+}
+
+@keyframes drop-preview-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(110, 168, 255, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(110, 168, 255, 0.35);
+  }
+}
+
+.card-slot.foundation.drop-preview,
+.tableau-col.drop-preview,
+#stock.drop-preview {
+  border-color: var(--accent);
+  border-style: solid;
+  background: rgba(110, 168, 255, 0.07);
+  animation: drop-preview-pulse 0.85s ease-in-out infinite;
+}
+
+/* Drag & drop */
+body.is-dragging {
+  cursor: grabbing;
+}
+
+body.is-dragging .draggable-card:hover {
+  transform: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.drag-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 1000;
+  margin: 0;
+  filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.45));
+}
+
+/* Animated deal / auto-foundation flights */
+.card.card-flight-ghost {
+  position: fixed;
+  z-index: 1001;
+  margin: 0;
+  pointer-events: none;
+  cursor: default;
+  transform: none !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  transition: none;
+}
+
+/* Hide real card while auto-foundation ghost flies — avoids double card */
+.card.card--auto-flight-source {
+  opacity: 0 !important;
+  pointer-events: none;
+  transition: none;
+}
+
+.drag-ghost-stack {
+  position: relative;
+}
+
+.card.drag-source-dim {
+  opacity: 0.42;
+  transition: opacity 0.12s ease;
 }
 
 /* ================================================================
-   Cards — face-up
+   Cards — face-up (flat, minimalist, strong outline)
    ================================================================ */
-
-/*
-  Structure (set by createCardEl):
-
-    <div class="card red|black">
-      <div class="card-corner card-corner--tl">
-        <span class="card-corner-rank">A</span>
-        <span class="card-corner-suit">♥</span>
-      </div>
-      <div class="card-pip">♥</div>
-      <div class="card-corner card-corner--br">
-        <span class="card-corner-rank">A</span>
-        <span class="card-corner-suit">♥</span>
-      </div>
-    </div>
-*/
-
 .card {
   position: absolute;
   width: var(--card-w);
   height: var(--card-h);
   border-radius: var(--card-radius);
-  border: 1px solid rgba(255,255,255,.10);
-  background: #1c2333;
-  background-image: linear-gradient(160deg, #222b3e 0%, #1c2333 100%);
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 5px;
-  cursor: pointer;
+  border: 1.5px solid var(--card-border);
+  background: var(--card-bg);
+  cursor: grab;
   transition: transform var(--transition), box-shadow var(--transition);
-  box-shadow:
-    0 1px 0 rgba(255,255,255,.05) inset,  /* top highlight */
-    0 2px 6px rgba(0,0,0,.45);
-  will-change: transform;
+  box-shadow: 0 2px 4px rgba(0,0,0,.5);
   overflow: hidden;
 }
 
 .card:hover {
-  box-shadow:
-    0 1px 0 rgba(255,255,255,.05) inset,
-    0 6px 18px rgba(0,0,0,.55);
-  transform: translateY(-3px);
-  z-index: 10;
+  transform: translateY(-2px);
+  box-shadow: 0 3px 8px rgba(0,0,0,.4);
 }
 
 .card.selected {
-  box-shadow:
-    0 0 0 2px var(--accent),
-    0 8px 22px rgba(56,139,253,.45);
-  transform: translateY(-5px);
+  box-shadow: 0 0 0 2px var(--accent), 0 3px 10px rgba(0,0,0,.45);
+  transform: translateY(-4px);
   z-index: 20;
 }
 
-/* Suit colour classes */
-.card.red   { color: var(--red); }
-.card.black { color: var(--black-card); }
+.card.red   { color: var(--card-red); }
+.card.black { color: var(--card-black); }
 
 /* ── Corners ──────────────────────────────────────────────────── */
 .card-corner {
+  position: absolute;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 1px;
   line-height: 1;
-  flex-shrink: 0;
+  font-weight: 700;
+}
+
+.card-corner--tl {
+  top: calc(var(--card-h) * 5 / 110);
+  left: calc(var(--card-w) * 6 / 78);
 }
 
 .card-corner--br {
+  bottom: calc(var(--card-h) * 5 / 110);
+  right: calc(var(--card-w) * 6 / 78);
   transform: rotate(180deg);
 }
 
 .card-corner-rank {
-  font-size: 13px;
-  font-weight: 700;
+  font-size: calc(var(--card-w) * 14 / 78);
   letter-spacing: -.5px;
-  /* "10" is wider — keep it on one line */
   white-space: nowrap;
 }
 
 .card-corner-suit {
-  font-size: 10px;
+  font-size: calc(var(--card-w) * 11 / 78);
   line-height: 1;
 }
 
-/* ── Centre pip ───────────────────────────────────────────────── */
-.card-pip {
-  flex: 1;
-  display: flex;
+/* ── Centre pips (grid of suit symbols) ───────────────────────── */
+.card-pips {
+  position: absolute;
+  inset: calc(var(--card-h) * 16 / 110) calc(var(--card-w) * 20 / 78);
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: repeat(7, 1fr);
+  justify-items: center;
   align-items: center;
-  justify-content: center;
-  font-size: 30px;
-  line-height: 1;
-  /* subtle drop-shadow makes the symbol pop on the dark card */
-  filter: drop-shadow(0 1px 2px rgba(0,0,0,.5));
   pointer-events: none;
 }
 
-/* ── Face-down / card back ────────────────────────────────────── */
-.card.face-down {
-  cursor: default;
-  background:
-    repeating-linear-gradient(
-      45deg,
-      #182035 0px,
-      #182035 5px,
-      #1e2d50 5px,
-      #1e2d50 10px
-    );
+.pip {
+  font-size: calc(var(--card-w) * 14 / 78);
+  line-height: 1;
 }
 
-/* Inner border gives a nice "framed back" look */
+.pip--flip {
+  transform: rotate(180deg);
+}
+
+/* Ace: larger single centre pip */
+.card[data-rank="A"] .pip {
+  font-size: calc(var(--card-w) * 32 / 78);
+}
+
+/* ── Face cards (J/Q/K): simple big letter ────────────────────── */
+.card-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(var(--card-w) * 38 / 78);
+  font-weight: 700;
+  letter-spacing: -2px;
+  pointer-events: none;
+}
+
+/* ── Face-down back ───────────────────────────────────────────── */
+.card.face-down {
+  cursor: default;
+  background: var(--card-back);
+  border-color: var(--card-border);
+}
+
 .card.face-down::after {
   content: "";
   position: absolute;
-  inset: 6px;
-  border: 1.5px solid rgba(255,255,255,.09);
+  inset: 5px;
+  border: 1.5px solid var(--card-back-2);
   border-radius: calc(var(--card-radius) - 2px);
+  background:
+    repeating-linear-gradient(
+      45deg,
+      transparent 0 6px,
+      rgba(255,255,255,.06) 6px 7px
+    );
 }
 
-/* ── Special rank labels for face cards ───────────────────────── */
-.card[data-rank="J"] .card-pip::after  { content: "J"; }
-.card[data-rank="Q"] .card-pip::after  { content: "Q"; }
-.card[data-rank="K"] .card-pip::after  { content: "K"; }
-.card[data-rank="J"] .card-pip,
-.card[data-rank="Q"] .card-pip,
-.card[data-rank="K"] .card-pip {
-  font-size: 0;       /* hide the suit symbol in the pip for face cards */
-}
-.card[data-rank="J"] .card-pip::after,
-.card[data-rank="Q"] .card-pip::after,
-.card[data-rank="K"] .card-pip::after {
-  font-size: 26px;
-  font-weight: 700;
-  opacity: .85;
-  letter-spacing: -1px;
-}
-
-/* ── Ace: bigger centre symbol ────────────────────────────────── */
-.card[data-rank="A"] .card-pip {
-  font-size: 38px;
-}
-
-/* ── Stacked tableau column ───────────────────────────────────── */
 .tableau-col {
   position: relative;
   height: auto;
@@ -462,7 +635,7 @@ html, body {
 }
 
 /* ================================================================
-   Stock pile visual (createStockEl)
+   Stock pile visual
    ================================================================ */
 .card-stock-pile {
   position: relative;
@@ -471,95 +644,106 @@ html, body {
   cursor: pointer;
 }
 
-/* Three layered backs suggest a stack of cards */
 .stock-layer {
   position: absolute;
   width: var(--card-w);
   height: var(--card-h);
   border-radius: var(--card-radius);
-  border: 1px solid rgba(255,255,255,.08);
+  border: 1.5px solid var(--card-border);
 }
 
-.stock-layer--2 { top: -4px; left: -2px; background: #14213a; }
-.stock-layer--1 { top: -2px; left: -1px; background: #172440; }
+.stock-layer--2 {
+  top: calc(var(--card-h) * -3 / 110);
+  left: calc(var(--card-w) * -2 / 78);
+  background: var(--card-back-2);
+}
+.stock-layer--1 {
+  top: calc(var(--card-h) * -1 / 110);
+  left: calc(var(--card-w) * -1 / 78);
+  background: var(--card-back);
+}
 .stock-layer--0 {
   top: 0; left: 0;
-  background:
-    repeating-linear-gradient(
-      45deg,
-      #182035 0px,
-      #182035 5px,
-      #1e2d50 5px,
-      #1e2d50 10px
-    );
-  box-shadow: 0 2px 8px rgba(0,0,0,.5);
+  background: var(--card-back);
 }
 
 .stock-layer--0::after {
   content: "";
   position: absolute;
-  inset: 6px;
-  border: 1.5px solid rgba(255,255,255,.09);
+  inset: 5px;
+  border: 1.5px solid var(--card-back-2);
   border-radius: calc(var(--card-radius) - 2px);
+  background:
+    repeating-linear-gradient(
+      45deg,
+      transparent 0 6px,
+      rgba(255,255,255,.06) 6px 7px
+    );
 }
 
 .stock-count {
   position: absolute;
-  bottom: 5px;
-  right: 7px;
-  font-size: 11px;
+  bottom: calc(var(--card-h) * 4 / 110);
+  right: calc(var(--card-w) * 6 / 78);
+  font-size: calc(var(--card-w) * 10 / 78);
   font-weight: 600;
-  color: rgba(255,255,255,.35);
+  color: rgba(255,255,255,.5);
   pointer-events: none;
   z-index: 5;
 }
 
 /* ================================================================
-   Waste fan (createWasteFanEl)
+   Waste fan
    ================================================================ */
 .waste-fan {
   position: relative;
-  width: var(--card-w);
+  width: 100%;
   height: var(--card-h);
 }
 
-.waste-card {
-  /* JS / renderWasteFan will set .style.left for the fan offset */
-}
-
-/* Cards peeking behind the top card */
 .waste-card--under {
   pointer-events: none;
-  filter: brightness(.75);
+  filter: brightness(.85);
+}
+
+@keyframes waste-draw-in {
+  0%   {
+    transform: translateX(calc(var(--card-w) * -1.2)) rotate(-6deg);
+    opacity: 0;
+  }
+  60%  { opacity: 1; }
+  100% {
+    transform: translateX(0) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+.waste-card--drawn {
+  animation: waste-draw-in 260ms cubic-bezier(.22,.9,.32,1) both;
 }
 
 /* ================================================================
-   Illegal-move shake animation
+   Animations
    ================================================================ */
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
-  20%       { transform: translateX(-6px); }
-  40%       { transform: translateX(6px); }
-  60%       { transform: translateX(-4px); }
-  80%       { transform: translateX(4px); }
+  20%      { transform: translateX(-6px); }
+  40%      { transform: translateX(6px); }
+  60%      { transform: translateX(-4px); }
+  80%      { transform: translateX(4px); }
 }
 
-.shake {
-  animation: shake 320ms ease;
-}
+.shake { animation: shake 300ms ease; }
 
-/* ================================================================
-   Win celebration
-   ================================================================ */
 @keyframes pop-in {
-  from { transform: scale(.7); opacity: 0; }
+  from { transform: scale(.8); opacity: 0; }
   to   { transform: scale(1); opacity: 1; }
 }
 
 .win-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,.65);
+  background: rgba(0,0,0,.7);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -569,27 +753,27 @@ html, body {
 .win-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 48px 56px;
+  border-radius: 8px;
+  padding: 44px 56px;
   text-align: center;
-  animation: pop-in 350ms cubic-bezier(.34,1.56,.64,1);
-  box-shadow: 0 24px 64px rgba(0,0,0,.6);
+  animation: pop-in 280ms cubic-bezier(.34,1.56,.64,1);
 }
 
 .win-card h2 {
-  font-size: 36px;
+  font-size: 32px;
+  font-weight: 600;
   margin-bottom: 8px;
 }
 
 .win-card p {
   color: var(--text-muted);
-  margin-bottom: 32px;
+  margin-bottom: 28px;
 }
 
 .win-card .btn-primary { margin-top: 0; }
 
 /* ================================================================
-   Scrollbar styling
+   Scrollbar
    ================================================================ */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }

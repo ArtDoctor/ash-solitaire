@@ -7,6 +7,9 @@ alwaysApply: true
 
 - **Stack:** Tauri, HTML, CSS, TypeScript. Do not introduce heavy frameworks unless the user asks.
 - **Source of truth:** `docs/REQUIREMENTS.md` for product rules and UX; `docs/TODO.md` for implementation checklist.
+- **TODO list:** When you finish work that satisfies a checkbox in `docs/TODO.md`, mark that item `[x]` in the same change (or immediately after). Do not leave completed work unchecked.
 - **Assets:** Keep reference screenshots under `assets/reference/`; do not delete them for convenience.
 - **Changes:** Make minimal, task-focused diffs; match existing naming and file layout. Do not add unsolicited markdown docs (user must ask).
+- **Tests:** When you change code (any source, tests, or build config that affects behavior), run the full test suite and fix failures before finishing: `npm run test` from the repo root (Vitest). Do not skip this or leave tests failing.
+- **Smoke test (release build):** After substantive changes (frontend, `src-tauri`, config, or dependencies), run the Windows release build to confirm nothing fails end-to-end: `.\build-exe.bat` from the repo root, or `npm run build:exe` (same script). Expect exit code 0 and the final paths printed at the end. Use a long timeout (several minutes) on first/clean builds; Rust relinks can take ~30s+ even when cached.
 - **Python:** Not used here; ignore user rules that mention Pydantic for this repo unless the user adds Python.
