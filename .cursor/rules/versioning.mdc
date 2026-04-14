@@ -1,0 +1,22 @@
+---
+description: Keep app semver in sync when shipping meaningful changes
+alwaysApply: true
+---
+
+# Version bumps (semver)
+
+When a change is user-visible or affects compatibility, bump the **app version** using [semver](https://semver.org/): **patch** (fixes), **minor** (backward-compatible features or behavior additions), **major** (breaking changes, incompatible UX/API, or removals users rely on).
+
+**Always keep these files on the same version** (replace `X.Y.Z` everywhere in one edit, then refresh lockfiles):
+
+| File | Notes |
+|------|--------|
+| `package.json` | `"version"` |
+| `package-lock.json` | Root `"version"` and `packages[""].version` — run `npm install` after editing `package.json` to sync reliably |
+| `src-tauri/Cargo.toml` | `[package].version` |
+| `src-tauri/Cargo.lock` | `[[package]]` entry for `name = "solitaire"` |
+| `src-tauri/tauri.conf.json` | `"version"` (Tauri bundle / updater metadata) |
+
+Do not bump only one file. After edits, run `npm install` from the repo root if `package-lock.json` was not updated by hand; run `cargo build` or `cargo check` in `src-tauri` if `Cargo.lock` needs to refresh.
+
+GitHub Releases use tags like `vX.Y.Z`; the tag should match the app version.

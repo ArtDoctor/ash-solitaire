@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Windows app
+        run: npm run build:exe
+
+      - name: Stage release assets
+        id: assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -f src-tauri/target/release/solitaire.exe ]]; then
+            echo "Expected binary missing: src-tauri/target/release/solitaire.exe"
+            exit 1
+          fi
+          {
+            echo "files<<EOF"
+            echo "src-tauri/target/release/solitaire.exe"
+            if [[ -d src-tauri/target/release/bundle ]]; then
+              find src-tauri/target/release/bundle -type f \( -name "*.exe" -o -name "*.msi" \) | sort -u
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.assets.outputs.files }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

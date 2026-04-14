@@ -718,24 +718,6 @@ function destinationCardElements(target: MoveTarget, stackLen: number): HTMLElem
   return null;
 }
 
-/**
- * After an auto foundation move, the new top card at the source pile (what was beneath
- * the moved card). Hidden during the flight so it does not show in the same slot as the ghost.
- */
-function autoFoundationExposeCoverElement(source: MoveSource): HTMLElement | null {
-  if (source.kind === "tableau") {
-    const col = document.getElementById(`tableau-${source.col}`);
-    const all = col?.querySelectorAll<HTMLElement>(".card");
-    if (!all?.length) return null;
-    return all[all.length - 1]!;
-  }
-  if (source.kind === "waste") {
-    const waste = document.getElementById("waste");
-    return waste?.querySelector<HTMLElement>(".waste-card:last-child") ?? null;
-  }
-  return null;
-}
-
 /** Cards currently at `source` after `renderGame` (same order as `peekMovingCards`). */
 function sourceCardElements(source: MoveSource, stackLen: number): HTMLElement[] | null {
   if (stackLen <= 0) return null;
@@ -842,20 +824,15 @@ async function flyCommittedFoundationMove(
   card: CardData,
   from: Rect,
   target: MoveTarget,
-  source: MoveSource,
 ): Promise<void> {
   const dest = destinationCardElements(target, 1);
   if (!dest || dest.length !== 1) return;
 
-  const exposeCover = autoFoundationExposeCoverElement(source);
-
   dest[0]!.classList.add("card--auto-flight-source");
-  exposeCover?.classList.add("card--auto-flight-source");
   void dest[0]!.offsetHeight;
   const to = rectsFromElements(dest)[0];
   if (!to) {
     dest[0]!.classList.remove("card--auto-flight-source");
-    exposeCover?.classList.remove("card--auto-flight-source");
     return;
   }
 
@@ -866,7 +843,6 @@ async function flyCommittedFoundationMove(
     });
   } finally {
     dest[0]!.classList.remove("card--auto-flight-source");
-    exposeCover?.classList.remove("card--auto-flight-source");
   }
 }
 
@@ -1000,7 +976,7 @@ async function runAutoFoundationChainAnimation(expectedEpoch: number): Promise<v
     gameState = applied;
     renderGame();
     if (!from) continue;
-    await flyCommittedFoundationMove(card, from, next.target, next.source);
+    await flyCommittedFoundationMove(card, from, next.target);
     if (expectedEpoch !== animEpoch) return;
   }
 }
