@@ -6,11 +6,10 @@ Working checklist derived from `docs/REQUIREMENTS.md`. Check items off as you co
 
 ## 0. Repository & tooling
 
-- [ ] Normalize reference screenshots under `assets/reference/` (keep originals preserved).
-- [ ] Initialize **Tauri** app with **HTML / CSS / TypeScript** frontend (official template or minimal equivalent).
-- [ ] Configure `package.json` scripts: `dev`, `build`, `tauri build` (or project-standard names).
-- [ ] Add **EditorConfig** / basic formatting alignment (optional but recommended).
-- [ ] Verify desktop build runs on target OS (Windows).
+- [x] Initialize **Tauri** app with **HTML / CSS / TypeScript** frontend (official template or minimal equivalent).
+- [x] Configure `package.json` scripts: `dev`, `build`, `tauri build` (or project-standard names).
+- [x] Add **EditorConfig** / basic formatting alignment (optional but recommended).
+- [x] Verify desktop build runs on target OS (Windows).
 
 ---
 
