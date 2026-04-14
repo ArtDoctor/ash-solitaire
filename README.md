@@ -2,6 +2,8 @@
 
 Klondike solitaire (draw three, single pass) with a vanilla HTML/CSS/TypeScript frontend and a Tauri 2 desktop shell.
 
+![Solitaire](assets/Screenshot.png)
+
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) (current LTS is fine)
