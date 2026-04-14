@@ -1,0 +1,12 @@
+---
+description: Tauri frontend — TypeScript, HTML, CSS conventions
+globs: "**/*.{ts,html,css}"
+alwaysApply: false
+---
+
+# Frontend
+
+- Prefer **plain TypeScript** modules for game state; keep DOM updates explicit or behind thin helpers.
+- Use **CSS** (or scoped patterns) for layout and motion; prefer `transform`/`opacity` for animations to stay fast.
+- **Types:** Use TypeScript interfaces/types for cards, piles, and game state — avoid untyped stringly dictionaries for core logic.
+- **Tauri:** Use `@tauri-apps/api` only where needed (e.g. persistence); keep logic testable without the shell when possible.

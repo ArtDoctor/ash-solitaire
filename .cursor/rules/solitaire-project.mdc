@@ -1,0 +1,12 @@
+---
+description: Solitaire project stack, docs, and agent constraints
+alwaysApply: true
+---
+
+# Solitaire (Tauri + HTML/CSS/TS)
+
+- **Stack:** Tauri, HTML, CSS, TypeScript. Do not introduce heavy frameworks unless the user asks.
+- **Source of truth:** `docs/REQUIREMENTS.md` for product rules and UX; `docs/TODO.md` for implementation checklist.
+- **Assets:** Keep reference screenshots under `assets/reference/`; do not delete them for convenience.
+- **Changes:** Make minimal, task-focused diffs; match existing naming and file layout. Do not add unsolicited markdown docs (user must ask).
+- **Python:** Not used here; ignore user rules that mention Pydantic for this repo unless the user adds Python.

@@ -1,0 +1,13 @@
+---
+description: Playwright E2E tests — structure and stability
+globs: "e2e/**/*.{ts,js}"
+alwaysApply: false
+---
+
+# Playwright
+
+- Put specs under `e2e/`; use stable **roles** / **test ids** (`data-testid`) on interactive elements — avoid brittle CSS-only selectors.
+- Prefer **one logical scenario per test**; use `test.describe` blocks for features (home → game, stock draw, navigation).
+- **Flakes:** Use explicit waits on visible state or navigation, not fixed `sleep` unless unavoidable.
+- Run against the **local dev URL** documented in the project (Vite/Tauri dev server or `preview`); do not assume production URLs.
+- Keep tests **headless-friendly**; avoid reliance on OS-native dialogs without handling.

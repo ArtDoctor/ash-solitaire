@@ -1,0 +1,11 @@
+---
+description: Playwright config — align with Tauri/Vite dev server
+globs: playwright.config.*
+alwaysApply: false
+---
+
+# Playwright config
+
+- Point `baseURL` at the local frontend (e.g. Vite default `http://127.0.0.1:1420` or project’s documented port — verify in `vite.config` / Tauri).
+- Use `webServer` in CI to start `npm run dev` (or build + `preview`) so e2e is one command.
+- Enable trace/screenshot on **first retry** only to save CI time unless debugging.
