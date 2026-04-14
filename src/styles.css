@@ -1,116 +1,599 @@
-.logo.vite:hover {
-  filter: drop-shadow(0 0 2em #747bff);
-}
-
-.logo.typescript:hover {
-  filter: drop-shadow(0 0 2em #2d79c7);
-}
+/* ================================================================
+   Design tokens
+   ================================================================ */
 :root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 400;
+  --bg:           #0d1117;
+  --surface:      #161b22;
+  --surface-2:    #21262d;
+  --border:       #30363d;
+  --border-subtle:#21262d;
+  --accent:       #388bfd;
+  --accent-hover: #58a6ff;
+  --text:         #e6edf3;
+  --text-muted:   #8b949e;
+  --red:          #ff6b6b;
+  --black-card:   #e6edf3;
 
-  color: #0f0f0f;
-  background-color: #f6f6f6;
+  --card-w:       74px;
+  --card-h:       104px;
+  --card-radius:  8px;
+  --card-gap:     10px;
+  --col-overlap:  30px;      /* how much each stacked card peeks out */
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
+  --header-h:     54px;
+  --sidebar-w:    100px;
+  --transition:   200ms ease;
 }
 
-.container {
+/* ================================================================
+   Reset / base
+   ================================================================ */
+*, *::before, *::after {
+  box-sizing: border-box;
   margin: 0;
-  padding-top: 10vh;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+/* ================================================================
+   Screens & transitions
+   ================================================================ */
+.screen {
+  position: fixed;
+  inset: 0;
   display: flex;
   flex-direction: column;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 280ms ease;
+}
+
+.screen.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ================================================================
+   HOME SCREEN
+   ================================================================ */
+#screen-home {
+  align-items: center;
   justify-content: center;
-  text-align: center;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 40%, #1a2540 0%, var(--bg) 70%);
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: 0.75s;
-}
-
-.logo.tauri:hover {
-  filter: drop-shadow(0 0 2em #24c8db);
-}
-
-.row {
+.home-content {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
+.home-logo {
+  display: flex;
+  gap: 12px;
+  font-size: 36px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,.6));
 }
 
-a:hover {
-  color: #535bf2;
+.suit-icon { display: inline-block; }
+.suit-hearts   { color: var(--red); }
+.suit-diamonds { color: var(--red); }
+.suit-spades   { color: var(--black-card); }
+.suit-clubs    { color: var(--black-card); }
+
+.home-title {
+  font-size: 52px;
+  font-weight: 700;
+  letter-spacing: -1px;
+  color: var(--text);
+  text-shadow: 0 2px 16px rgba(0,0,0,.5);
 }
 
-h1 {
-  text-align: center;
+.home-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  letter-spacing: .5px;
+  text-transform: uppercase;
 }
 
-input,
-button {
+/* ================================================================
+   Buttons
+   ================================================================ */
+.btn-primary {
+  margin-top: 8px;
+  padding: 14px 52px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
   border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  color: #0f0f0f;
-  background-color: #ffffff;
-  transition: border-color 0.25s;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: .3px;
+  cursor: pointer;
+  transition: background var(--transition), transform var(--transition),
+              box-shadow var(--transition);
+  box-shadow: 0 4px 16px rgba(56,139,253,.35);
 }
 
-button {
+.btn-primary:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(88,166,255,.45);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-control {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+
+.btn-control:hover {
+  background: var(--border);
+  border-color: var(--text-muted);
+}
+
+.btn-control .icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* ================================================================
+   GAME SCREEN layout
+   ================================================================ */
+#screen-game {
+  background: var(--bg);
+}
+
+/* Header */
+.game-header {
+  flex-shrink: 0;
+  height: var(--header-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.header-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: .3px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.win-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.1;
+}
+
+.win-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  color: var(--text-muted);
+}
+
+.win-number {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent-hover);
+}
+
+/* Game area: sidebar + main */
+.game-area {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* Foundations sidebar */
+.foundations-col {
+  flex-shrink: 0;
+  width: var(--sidebar-w);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--card-gap);
+  padding: 16px 12px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+}
+
+/* Play area */
+.play-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+/* Stock / waste row */
+.stock-row {
+  display: flex;
+  gap: var(--card-gap);
+  flex-shrink: 0;
+}
+
+/* Tableau row */
+.tableau {
+  flex: 1;
+  display: flex;
+  gap: var(--card-gap);
+  align-items: flex-start;
+}
+
+.tableau-col {
+  flex: 1;
+  min-width: var(--card-w);
+  min-height: var(--card-h);
+  position: relative;
+}
+
+/* ================================================================
+   Card slots (empty placeholders)
+   ================================================================ */
+.card-slot,
+.tableau-col {
+  width: var(--card-w);
+  height: var(--card-h);
+  border: 2px dashed var(--border);
+  border-radius: var(--card-radius);
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color var(--transition), background var(--transition);
+}
+
+.card-slot.foundation::after {
+  content: attr(data-suit);
+  font-size: 26px;
+  color: var(--border);
+  pointer-events: none;
+}
+
+.card-slot.stock-slot::after {
+  content: "🂠";
+  font-size: 32px;
+  opacity: .25;
+  pointer-events: none;
+}
+
+.card-slot.waste-slot::after {
+  content: "";
+}
+
+/* Highlight drop targets */
+.card-slot.drop-target,
+.tableau-col.drop-target {
+  border-color: var(--accent);
+  background: rgba(56,139,253,.08);
+}
+
+/* ================================================================
+   Cards — face-up
+   ================================================================ */
+
+/*
+  Structure (set by createCardEl):
+
+    <div class="card red|black">
+      <div class="card-corner card-corner--tl">
+        <span class="card-corner-rank">A</span>
+        <span class="card-corner-suit">♥</span>
+      </div>
+      <div class="card-pip">♥</div>
+      <div class="card-corner card-corner--br">
+        <span class="card-corner-rank">A</span>
+        <span class="card-corner-suit">♥</span>
+      </div>
+    </div>
+*/
+
+.card {
+  position: absolute;
+  width: var(--card-w);
+  height: var(--card-h);
+  border-radius: var(--card-radius);
+  border: 1px solid rgba(255,255,255,.10);
+  background: #1c2333;
+  background-image: linear-gradient(160deg, #222b3e 0%, #1c2333 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 5px;
+  cursor: pointer;
+  transition: transform var(--transition), box-shadow var(--transition);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.05) inset,  /* top highlight */
+    0 2px 6px rgba(0,0,0,.45);
+  will-change: transform;
+  overflow: hidden;
+}
+
+.card:hover {
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.05) inset,
+    0 6px 18px rgba(0,0,0,.55);
+  transform: translateY(-3px);
+  z-index: 10;
+}
+
+.card.selected {
+  box-shadow:
+    0 0 0 2px var(--accent),
+    0 8px 22px rgba(56,139,253,.45);
+  transform: translateY(-5px);
+  z-index: 20;
+}
+
+/* Suit colour classes */
+.card.red   { color: var(--red); }
+.card.black { color: var(--black-card); }
+
+/* ── Corners ──────────────────────────────────────────────────── */
+.card-corner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.card-corner--br {
+  transform: rotate(180deg);
+}
+
+.card-corner-rank {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -.5px;
+  /* "10" is wider — keep it on one line */
+  white-space: nowrap;
+}
+
+.card-corner-suit {
+  font-size: 10px;
+  line-height: 1;
+}
+
+/* ── Centre pip ───────────────────────────────────────────────── */
+.card-pip {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  line-height: 1;
+  /* subtle drop-shadow makes the symbol pop on the dark card */
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,.5));
+  pointer-events: none;
+}
+
+/* ── Face-down / card back ────────────────────────────────────── */
+.card.face-down {
+  cursor: default;
+  background:
+    repeating-linear-gradient(
+      45deg,
+      #182035 0px,
+      #182035 5px,
+      #1e2d50 5px,
+      #1e2d50 10px
+    );
+}
+
+/* Inner border gives a nice "framed back" look */
+.card.face-down::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border: 1.5px solid rgba(255,255,255,.09);
+  border-radius: calc(var(--card-radius) - 2px);
+}
+
+/* ── Special rank labels for face cards ───────────────────────── */
+.card[data-rank="J"] .card-pip::after  { content: "J"; }
+.card[data-rank="Q"] .card-pip::after  { content: "Q"; }
+.card[data-rank="K"] .card-pip::after  { content: "K"; }
+.card[data-rank="J"] .card-pip,
+.card[data-rank="Q"] .card-pip,
+.card[data-rank="K"] .card-pip {
+  font-size: 0;       /* hide the suit symbol in the pip for face cards */
+}
+.card[data-rank="J"] .card-pip::after,
+.card[data-rank="Q"] .card-pip::after,
+.card[data-rank="K"] .card-pip::after {
+  font-size: 26px;
+  font-weight: 700;
+  opacity: .85;
+  letter-spacing: -1px;
+}
+
+/* ── Ace: bigger centre symbol ────────────────────────────────── */
+.card[data-rank="A"] .card-pip {
+  font-size: 38px;
+}
+
+/* ── Stacked tableau column ───────────────────────────────────── */
+.tableau-col {
+  position: relative;
+  height: auto;
+  min-height: var(--card-h);
+}
+
+/* ================================================================
+   Stock pile visual (createStockEl)
+   ================================================================ */
+.card-stock-pile {
+  position: relative;
+  width: var(--card-w);
+  height: var(--card-h);
   cursor: pointer;
 }
 
-button:hover {
-  border-color: #396cd8;
-}
-button:active {
-  border-color: #396cd8;
-  background-color: #e8e8e8;
-}
-
-input,
-button {
-  outline: none;
+/* Three layered backs suggest a stack of cards */
+.stock-layer {
+  position: absolute;
+  width: var(--card-w);
+  height: var(--card-h);
+  border-radius: var(--card-radius);
+  border: 1px solid rgba(255,255,255,.08);
 }
 
-#greet-input {
-  margin-right: 5px;
+.stock-layer--2 { top: -4px; left: -2px; background: #14213a; }
+.stock-layer--1 { top: -2px; left: -1px; background: #172440; }
+.stock-layer--0 {
+  top: 0; left: 0;
+  background:
+    repeating-linear-gradient(
+      45deg,
+      #182035 0px,
+      #182035 5px,
+      #1e2d50 5px,
+      #1e2d50 10px
+    );
+  box-shadow: 0 2px 8px rgba(0,0,0,.5);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
-  }
+.stock-layer--0::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border: 1.5px solid rgba(255,255,255,.09);
+  border-radius: calc(var(--card-radius) - 2px);
+}
 
-  a:hover {
-    color: #24c8db;
-  }
+.stock-count {
+  position: absolute;
+  bottom: 5px;
+  right: 7px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,.35);
+  pointer-events: none;
+  z-index: 5;
+}
 
-  input,
-  button {
-    color: #ffffff;
-    background-color: #0f0f0f98;
-  }
-  button:active {
-    background-color: #0f0f0f69;
-  }
+/* ================================================================
+   Waste fan (createWasteFanEl)
+   ================================================================ */
+.waste-fan {
+  position: relative;
+  width: var(--card-w);
+  height: var(--card-h);
+}
+
+.waste-card {
+  /* JS / renderWasteFan will set .style.left for the fan offset */
+}
+
+/* Cards peeking behind the top card */
+.waste-card--under {
+  pointer-events: none;
+  filter: brightness(.75);
+}
+
+/* ================================================================
+   Illegal-move shake animation
+   ================================================================ */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-6px); }
+  40%       { transform: translateX(6px); }
+  60%       { transform: translateX(-4px); }
+  80%       { transform: translateX(4px); }
+}
+
+.shake {
+  animation: shake 320ms ease;
+}
+
+/* ================================================================
+   Win celebration
+   ================================================================ */
+@keyframes pop-in {
+  from { transform: scale(.7); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+
+.win-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.win-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 48px 56px;
+  text-align: center;
+  animation: pop-in 350ms cubic-bezier(.34,1.56,.64,1);
+  box-shadow: 0 24px 64px rgba(0,0,0,.6);
+}
+
+.win-card h2 {
+  font-size: 36px;
+  margin-bottom: 8px;
+}
+
+.win-card p {
+  color: var(--text-muted);
+  margin-bottom: 32px;
+}
+
+.win-card .btn-primary { margin-top: 0; }
+
+/* ================================================================
+   Scrollbar styling
+   ================================================================ */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
 }
