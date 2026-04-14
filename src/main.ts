@@ -47,6 +47,11 @@ let dealAnim: DealAnimState | null = null;
 /** Blocks input while deal / fly / waste draw runs. */
 let animBusy = false;
 
+function setAnimBusy(busy: boolean): void {
+  animBusy = busy;
+  document.body.classList.toggle("anim-busy", busy);
+}
+
 const DRAG_START_PX = 6;
 /** Radius at which gravity toward a valid target starts to influence the ghost. */
 const GRAVITY_RADIUS_PX = 170;
@@ -62,6 +67,8 @@ type DragSession = {
   cards: CardData[];
   ghost: HTMLElement;
   grabEl: HTMLElement;
+  /** Tableau run / single source — all dimmed while dragging */
+  dimEls: HTMLElement[];
   /** Offset from pointer to ghost top-left */
   offsetX: number;
   offsetY: number;
@@ -373,13 +380,26 @@ function positionGhost(session: DragSession, clientX: number, clientY: number, h
   session.ghost.style.top = `${top}px`;
 }
 
-function endDrag(): void {
+function endDrag(options?: { keepGhost?: boolean }): void {
   if (!drag) return;
-  drag.grabEl.classList.remove("drag-source-dim");
-  drag.ghost.remove();
+  for (const el of drag.dimEls) el.classList.remove("drag-source-dim");
+  if (!options?.keepGhost) drag.ghost.remove();
   document.body.classList.remove("is-dragging");
   clearDropPreview();
   drag = null;
+}
+
+/** DOM nodes to dim for the whole moving stack (tableau run or single card). */
+function dragSourceDimElements(source: MoveSource, grabEl: HTMLElement): HTMLElement[] {
+  if (source.kind === "tableau") {
+    const col = document.getElementById(`tableau-${source.col}`);
+    const nodes = col?.querySelectorAll<HTMLElement>(".card");
+    if (!nodes?.length) return [grabEl];
+    const out: HTMLElement[] = [];
+    for (let i = source.start; i < nodes.length; i++) out.push(nodes[i]!);
+    return out.length > 0 ? out : [grabEl];
+  }
+  return [grabEl];
 }
 
 function startDragFromPending(): DragSession | null {
@@ -400,11 +420,13 @@ function startDragFromPending(): DragSession | null {
   const offsetY = start.y - rect.top + grabIndex * cssLengthVarPx("--col-overlap", "height");
 
   const ghost = createDragGhost(cards);
+  const dimEls = dragSourceDimElements(source, grabEl);
   const session: DragSession = {
     source,
     cards,
     ghost,
     grabEl,
+    dimEls,
     offsetX,
     offsetY,
     grabIndex,
@@ -413,7 +435,7 @@ function startDragFromPending(): DragSession | null {
   };
   drag = session;
   document.body.classList.add("is-dragging");
-  grabEl.classList.add("drag-source-dim");
+  for (const el of dimEls) el.classList.add("drag-source-dim");
   positionGhost(session, start.x, start.y, null);
 
   const cleanupPointers = () => {
@@ -450,20 +472,25 @@ function startDragFromPending(): DragSession | null {
 
     if (!drag) return;
     const current = drag;
+
+    const hitRelease = findGravity(e.clientX, e.clientY, current);
+    positionGhost(current, e.clientX, e.clientY, hitRelease);
+
     // Priority: explicit pointer-over target > strong gravity pull
     const underPointer = targetUnderPointer(e.clientX, e.clientY, current);
     let target: MoveTarget | null = underPointer;
-    if (!target) {
-      const hit = findGravity(e.clientX, e.clientY, current);
-      if (hit && hit.pull >= GRAVITY_COMMIT_MIN) target = hit.target;
+    if (!target && hitRelease && hitRelease.pull >= GRAVITY_COMMIT_MIN) {
+      target = hitRelease.target;
     }
 
     let didMove: GameState | null = null;
+    let committedTarget: MoveTarget | null = null;
     if (target) {
       const moved = tryApplyMove(gameState, current.source, target);
       if (moved) {
         gameState = moved;
         didMove = moved;
+        committedTarget = target;
         checkWin();
       } else {
         const slot =
@@ -476,17 +503,38 @@ function startDragFromPending(): DragSession | null {
       }
     }
 
-    endDrag();
+    const dropFromRects =
+      didMove && committedTarget ? rectsFromDragGhost(current.ghost) : null;
+    const reboundFromRects = !didMove ? rectsFromDragGhost(current.ghost) : null;
+    const reboundGhost: HTMLElement | null = !didMove ? current.ghost : null;
+
+    if (didMove) endDrag();
+    else endDrag({ keepGhost: true });
     renderGame();
 
-    if (didMove) {
-      animBusy = true;
+    if (didMove && committedTarget && dropFromRects) {
+      setAnimBusy(true);
       void (async () => {
         try {
+          await flyPlayerMoveToDestination(current.cards, dropFromRects, committedTarget);
           await runAutoFoundationChainAnimation();
           checkWin();
         } finally {
-          animBusy = false;
+          setAnimBusy(false);
+        }
+      })();
+    } else if (reboundFromRects) {
+      setAnimBusy(true);
+      void (async () => {
+        try {
+          await flyPlayerMoveToSource(
+            current.cards,
+            reboundFromRects,
+            current.source,
+            reboundGhost,
+          );
+        } finally {
+          setAnimBusy(false);
         }
       })();
     }
@@ -532,6 +580,8 @@ function onGlobalPointerUpCancelHandler(): void {
 
 const FLY_MS_DEAL = 88;
 const FLY_MS_FOUNDATION = 380;
+/** Player drop: ghost → pile */
+const FLY_MS_PLAYER_MOVE = 320;
 const WASTE_DRAW_BASE_MS = 260;
 const WASTE_DRAW_STAGGER_MS = 70;
 
@@ -606,6 +656,112 @@ function elementForMoveSource(src: MoveSource): HTMLElement | null {
   const cards = col?.querySelectorAll<HTMLElement>(".card");
   if (!cards?.length) return null;
   return cards[cards.length - 1] ?? null;
+}
+
+function rectsFromDragGhost(ghost: HTMLElement): Rect[] {
+  return [...ghost.querySelectorAll<HTMLElement>(".drag-ghost-stack .card")].map((el) =>
+    toRect(el.getBoundingClientRect()),
+  );
+}
+
+/** Cards that ended up on `target` after `renderGame` (same order as `peekMovingCards` had). */
+function destinationCardElements(target: MoveTarget, stackLen: number): HTMLElement[] | null {
+  if (stackLen <= 0) return null;
+  if (target.kind === "foundation") {
+    const slot = document.getElementById(`foundation-${target.pile}`);
+    const c = slot?.querySelector<HTMLElement>(".card");
+    return c ? [c] : null;
+  }
+  if (target.kind === "freeCell") {
+    const stock = document.getElementById("stock");
+    const c = stock?.querySelector<HTMLElement>(".card");
+    return c ? [c] : null;
+  }
+  if (target.kind === "tableau") {
+    const col = document.getElementById(`tableau-${target.col}`);
+    const all = col?.querySelectorAll<HTMLElement>(".card");
+    if (!all?.length) return null;
+    const n = all.length;
+    if (n < stackLen) return null;
+    const out: HTMLElement[] = [];
+    for (let i = n - stackLen; i < n; i++) out.push(all[i]!);
+    return out.length === stackLen ? out : null;
+  }
+  return null;
+}
+
+/** Cards currently at `source` after `renderGame` (same order as `peekMovingCards`). */
+function sourceCardElements(source: MoveSource, stackLen: number): HTMLElement[] | null {
+  if (stackLen <= 0) return null;
+  if (source.kind === "waste") {
+    const waste = document.getElementById("waste");
+    const top = waste?.querySelector<HTMLElement>(".waste-card:last-child");
+    return top ? [top] : null;
+  }
+  if (source.kind === "freeCell") {
+    const stock = document.getElementById("stock");
+    const c = stock?.querySelector<HTMLElement>(".card");
+    return c ? [c] : null;
+  }
+  if (source.kind === "tableau") {
+    const col = document.getElementById(`tableau-${source.col}`);
+    const all = col?.querySelectorAll<HTMLElement>(".card");
+    if (!all?.length) return null;
+    const end = source.start + stackLen;
+    if (end > all.length) return null;
+    const out: HTMLElement[] = [];
+    for (let i = source.start; i < end; i++) out.push(all[i]!);
+    return out.length === stackLen ? out : null;
+  }
+  return null;
+}
+
+async function flyPlayerMoveToDestination(
+  cards: CardData[],
+  fromRects: Rect[],
+  target: MoveTarget,
+): Promise<void> {
+  if (cards.length !== fromRects.length) return;
+  const dest = destinationCardElements(target, cards.length);
+  if (!dest || dest.length !== cards.length) return;
+
+  dest.forEach((el) => el.classList.add("card--auto-flight-source"));
+  void dest[0]!.offsetHeight;
+  const toRects = dest.map((el) => toRect(el.getBoundingClientRect()));
+
+  try {
+    await Promise.all(
+      cards.map((card, i) => flyCard(card, fromRects[i]!, toRects[i]!, FLY_MS_PLAYER_MOVE)),
+    );
+  } finally {
+    dest.forEach((el) => el.classList.remove("card--auto-flight-source"));
+  }
+}
+
+/** Invalid drop: fly from release position back to original pile. */
+async function flyPlayerMoveToSource(
+  cards: CardData[],
+  fromRects: Rect[],
+  source: MoveSource,
+  dragGhostToRemove?: HTMLElement | null,
+): Promise<void> {
+  if (dragGhostToRemove) dragGhostToRemove.remove();
+
+  if (cards.length !== fromRects.length) return;
+  const dest = sourceCardElements(source, cards.length);
+  if (!dest || dest.length !== cards.length) return;
+
+  dest.forEach((el) => el.classList.add("card--auto-flight-source"));
+  void dest[0]!.offsetHeight;
+  const toRects = dest.map((el) => toRect(el.getBoundingClientRect()));
+
+  try {
+    await Promise.all(
+      cards.map((card, i) => flyCard(card, fromRects[i]!, toRects[i]!, FLY_MS_PLAYER_MOVE)),
+    );
+  } finally {
+    dest.forEach((el) => el.classList.remove("card--auto-flight-source"));
+  }
 }
 
 function flyCard(card: CardData, from: Rect, to: Rect, durationMs: number): Promise<void> {
@@ -698,7 +854,7 @@ async function runAutoFoundationChainAnimation(): Promise<void> {
 async function runDealSequenceAnimation(full: GameState): Promise<void> {
   const seq = getDealSequence(full);
   dealAnim = { full, seq, k: 0 };
-  animBusy = true;
+  setAnimBusy(true);
   try {
     renderGame();
     for (let step = 0; step < DEAL_STEPS; step++) {
@@ -717,7 +873,7 @@ async function runDealSequenceAnimation(full: GameState): Promise<void> {
     await runAutoFoundationChainAnimation();
     checkWin();
   } finally {
-    animBusy = false;
+    setAnimBusy(false);
   }
 }
 
@@ -913,7 +1069,7 @@ async function onStockClick(): Promise<void> {
   checkWin();
   renderGame();
 
-  animBusy = true;
+  setAnimBusy(true);
   try {
     await waitWasteDrawAnimation(lastDrawCount);
     lastDrawCount = 0;
@@ -921,7 +1077,7 @@ async function onStockClick(): Promise<void> {
     await runAutoFoundationChainAnimation();
     checkWin();
   } finally {
-    animBusy = false;
+    setAnimBusy(false);
   }
 }
 
@@ -932,12 +1088,12 @@ async function onWasteDoubleClick(): Promise<void> {
   gameState = next;
   checkWin();
   renderGame();
-  animBusy = true;
+  setAnimBusy(true);
   try {
     await runAutoFoundationChainAnimation();
     checkWin();
   } finally {
-    animBusy = false;
+    setAnimBusy(false);
   }
 }
 
@@ -948,12 +1104,12 @@ async function onFreeCellDoubleClick(): Promise<void> {
   gameState = next;
   checkWin();
   renderGame();
-  animBusy = true;
+  setAnimBusy(true);
   try {
     await runAutoFoundationChainAnimation();
     checkWin();
   } finally {
-    animBusy = false;
+    setAnimBusy(false);
   }
 }
 
@@ -968,12 +1124,12 @@ async function onTableauDoubleClick(col: number, idx: number): Promise<void> {
   gameState = next;
   checkWin();
   renderGame();
-  animBusy = true;
+  setAnimBusy(true);
   try {
     await runAutoFoundationChainAnimation();
     checkWin();
   } finally {
-    animBusy = false;
+    setAnimBusy(false);
   }
 }
 
@@ -1002,7 +1158,7 @@ function restartGame(): void {
 async function goHome(): Promise<void> {
   endDrag();
   clearPendingDrag();
-  await applyWindowGameFullscreen(false);
+  await applyWindowGameFullscreen(loadGameFullscreenPref());
   showScreen("home");
 }
 
@@ -1042,7 +1198,9 @@ window.addEventListener("DOMContentLoaded", () => {
     ?.addEventListener("change", (e) => {
       const el = e.target as HTMLInputElement;
       saveGameFullscreenPref(el.checked);
+      void applyWindowGameFullscreen(el.checked);
     });
 
   showScreen("home");
+  void applyWindowGameFullscreen(loadGameFullscreenPref());
 });

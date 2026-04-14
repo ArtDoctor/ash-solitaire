@@ -468,6 +468,12 @@ body.is-dragging .draggable-card:hover {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
+/* No hover lift during deal / flights — avoids jitter against CSS animations */
+body.anim-busy .card:hover {
+  transform: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
 .drag-ghost {
   position: fixed;
   left: 0;
