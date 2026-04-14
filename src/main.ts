@@ -27,6 +27,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 
 const WINS_KEY = "solitaire-wins";
 const GAME_FULLSCREEN_KEY = "solitaire-game-borderless-fullscreen";
+const NO_DRAG_GHOST_CLONES_KEY = "solitaire-no-drag-ghost-clones";
 
 type ScreenId = "home" | "settings" | "game";
 
@@ -120,6 +121,18 @@ function saveGameFullscreenPref(on: boolean): void {
   localStorage.setItem(GAME_FULLSCREEN_KEY, on ? "true" : "false");
 }
 
+function loadNoDragGhostClonesPref(): boolean {
+  return localStorage.getItem(NO_DRAG_GHOST_CLONES_KEY) === "true";
+}
+
+function saveNoDragGhostClonesPref(on: boolean): void {
+  localStorage.setItem(NO_DRAG_GHOST_CLONES_KEY, on ? "true" : "false");
+}
+
+function applyNoDragGhostClonesPref(): void {
+  document.body.classList.toggle("no-drag-ghost-clones", loadNoDragGhostClonesPref());
+}
+
 async function applyWindowGameFullscreen(enabled: boolean): Promise<void> {
   if (!isTauri()) return;
   await invoke("set_game_fullscreen", { enabled });
@@ -131,10 +144,14 @@ async function quitApplication(): Promise<void> {
 }
 
 function syncSettingsCheckbox(): void {
-  const el = document.getElementById(
+  const fullscreen = document.getElementById(
     "setting-game-fullscreen",
   ) as HTMLInputElement | null;
-  if (el) el.checked = loadGameFullscreenPref();
+  if (fullscreen) fullscreen.checked = loadGameFullscreenPref();
+  const noClones = document.getElementById(
+    "setting-no-drag-ghost-clones",
+  ) as HTMLInputElement | null;
+  if (noClones) noClones.checked = loadNoDragGhostClonesPref();
 }
 
 function shake(el: HTMLElement): void {
@@ -1201,6 +1218,15 @@ window.addEventListener("DOMContentLoaded", () => {
       void applyWindowGameFullscreen(el.checked);
     });
 
+  document
+    .getElementById("setting-no-drag-ghost-clones")
+    ?.addEventListener("change", (e) => {
+      const el = e.target as HTMLInputElement;
+      saveNoDragGhostClonesPref(el.checked);
+      applyNoDragGhostClonesPref();
+    });
+
+  applyNoDragGhostClonesPref();
   showScreen("home");
   void applyWindowGameFullscreen(loadGameFullscreenPref());
 });
