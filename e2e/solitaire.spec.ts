@@ -5,26 +5,34 @@ import { expect, test } from "@playwright/test";
  * Run: npm run test:e2e — Playwright builds, serves `vite preview` on 127.0.0.1:4173.
  */
 
-/** Deal + post-deal auto-foundation animations set `body.anim-busy` (see `setAnimBusy` in main). */
+/** Wait until the game UI is stable and all 52 cards are accounted for. */
 async function waitForDealComplete(page: import("@playwright/test").Page): Promise<void> {
-  await expect(page.locator("body")).toHaveClass(/anim-busy/, { timeout: 15_000 });
-  await expect(page.locator("body")).not.toHaveClass(/anim-busy/, { timeout: 60_000 });
-  /**
-   * Under parallel e2e load, `anim-busy` can clear before `dealAnim`/stock count match finished
-   * deal state (e.g. stock badge still shows 52−k during a partial deal). A full deal leaves at
-   * most 24 cards in stock; higher values mean the UI is still mid-deal or inconsistent.
-   */
   await expect
     .poll(
       async () =>
         page.evaluate(() => {
-          const pile = document.querySelector<HTMLElement>("#stock .card-stock-pile");
-          if (!pile) return true;
-          return parseInt(pile.dataset.count ?? "999", 10) <= 24;
+          let total = 0;
+          for (let c = 0; c < 7; c++) {
+            total += document.querySelectorAll(`#tableau-${c} .card`).length;
+          }
+          for (let f = 0; f < 4; f++) {
+            total += document.querySelectorAll(`#foundation-${f} .card`).length;
+          }
+          total += document.querySelectorAll("#waste .waste-card").length;
+          const stockPile = document.querySelector<HTMLElement>("#stock .card-stock-pile");
+          if (stockPile) {
+            total += parseInt(stockPile.dataset.count ?? "0", 10);
+          } else if (document.querySelector("#stock > .card")) {
+            total += 1;
+          }
+          return JSON.stringify({
+            busy: document.body.classList.contains("anim-busy"),
+            total,
+          });
         }),
-      { timeout: 15_000 },
+      { timeout: 60_000 },
     )
-    .toBe(true);
+    .toBe(JSON.stringify({ busy: false, total: 52 }));
 }
 
 async function tableauSignature(page: import("@playwright/test").Page): Promise<string> {

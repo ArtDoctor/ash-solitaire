@@ -9,7 +9,8 @@ import {
   type CardData,
 } from "./cards.js";
 import {
-  dealFairOpening,
+  dealFairOpeningDeal,
+  dealNewGame,
   drawFromStock,
   getDealSequence,
   isValidDescendingRun,
@@ -31,7 +32,7 @@ const HIDE_STATIONARY_DRAG_SOURCE_KEY = "solitaire-hide-stationary-drag-source";
 
 type ScreenId = "home" | "settings" | "game";
 
-let gameState: GameState = dealFairOpening(Math.random);
+let gameState: GameState = dealNewGame(Math.random);
 /** How many waste cards were just added by the most recent stock draw (for animation). */
 let lastDrawCount = 0;
 
@@ -1264,7 +1265,7 @@ async function dealAndRender(): Promise<void> {
   clearPendingDrag();
   animEpoch++;
   const myEpoch = animEpoch;
-  const full = dealFairOpening(Math.random);
+  const full = dealFairOpeningDeal(Math.random);
   await runDealSequenceAnimation(full, myEpoch);
 }
 

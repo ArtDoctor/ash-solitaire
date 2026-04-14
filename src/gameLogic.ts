@@ -435,3 +435,21 @@ export function dealFairOpening(
   }
   return last;
 }
+
+/**
+ * Picks a fair opening deal while preserving the original 28-card tableau layout.
+ * Use this for deal animations, then run auto-foundation moves afterward.
+ */
+export function dealFairOpeningDeal(
+  rng: () => number,
+  opts?: { minMoves?: number; maxAttempts?: number },
+): GameState {
+  const minMoves = opts?.minMoves ?? 8;
+  const maxAttempts = opts?.maxAttempts ?? 80;
+  let last: GameState = dealNewGame(rng);
+  for (let i = 0; i < maxAttempts; i++) {
+    last = dealNewGame(rng);
+    if (dealMobilityEstimate(applyAutoFoundationChain(last)) >= minMoves) return last;
+  }
+  return last;
+}

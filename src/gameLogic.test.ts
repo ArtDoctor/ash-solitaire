@@ -3,6 +3,7 @@ import {
   applyAutoFoundationChain,
   canMoveToFoundationPile,
   countLegalMoves,
+  dealFairOpeningDeal,
   createDeck,
   dealFairOpening,
   dealMobilityEstimate,
@@ -175,6 +176,16 @@ describe("dealFairOpening", () => {
   it("meets a minimum mobility threshold when possible within attempts", () => {
     const g = dealFairOpening(mulberry32(999), { minMoves: 12, maxAttempts: 120 });
     expect(dealMobilityEstimate(g)).toBeGreaterThanOrEqual(12);
+  });
+});
+
+describe("dealFairOpeningDeal", () => {
+  it("keeps the original 1..7 tableau layout while selecting a fair opening", () => {
+    const g = dealFairOpeningDeal(mulberry32(999), { minMoves: 12, maxAttempts: 120 });
+    for (let c = 0; c < 7; c++) {
+      expect(g.tableau[c]).toHaveLength(c + 1);
+    }
+    expect(dealMobilityEstimate(applyAutoFoundationChain(g))).toBeGreaterThanOrEqual(12);
   });
 });
 
