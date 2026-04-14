@@ -40,7 +40,7 @@ Working checklist derived from `docs/REQUIREMENTS.md`. Check items off as you co
 
 - [x] Smooth card motion (CSS transforms / FLIP / small library — keep bundle light).
 - [x] Illegal-move feedback; legal targets readable.
-- [ ] Main screen animations: cards moving from the dack into main part, cards moving from deck to the left panel when there is automated moving, etc.
+- [x] Main screen animations: cards moving from the dack into main part, cards moving from deck to the left panel when there is automated moving, etc.
 - [x] Animations when drawing 3 cards.
 - [x] **Win count** — display + persist (Tauri store or local file / `localStorage` with fallback).
 - [x] Win celebration state (subtle animation enough for v1).
@@ -58,19 +58,18 @@ Working checklist derived from `docs/REQUIREMENTS.md`. Check items off as you co
 
 ### 4.2 End-to-end (Playwright)
 
-- [ ] Add **Playwright**; configure for the **web build** served locally (Tauri dev server or static `dist` — pick one stable flow for CI).
-- [ ] Script `test:e2e` in `package.json`; document one-command local run in a short comment or script header.
-- [ ] Smoke: open app → home visible → launch game → tableau has 7 columns.
-- [ ] Interaction: draw from stock → waste shows draw-three behavior; only top waste card draggable/clickable per spec.
-- [ ] Navigation: game → main menu → home; restart starts new layout (deterministic seed optional for CI).
-- [ ] Optional: screenshot snapshot for critical screens (dark theme) if flakiness is manageable.
+- [x] Add **Playwright**; configure for the **web build** served locally (Tauri dev server or static `dist` — pick one stable flow for CI).
+- [x] Script `test:e2e` in `package.json`; document one-command local run in a short comment or script header.
+- [x] Smoke: open app → home visible → launch game → tableau has 7 columns.
+- [x] Interaction: draw from stock → waste shows draw-three behavior; only top waste card draggable/clickable per spec.
+- [x] Navigation: game → main menu → home; restart starts new layout (deterministic seed optional for CI).
 
 ---
 
 ## 5. Release & polish
 
-- [ ] `tauri build` produces installable artifact; smoke-test install.
-- [ ] README: how to dev, test, build (minimal — only if you add a README later).
+- [x] `tauri build` produces installable artifact; smoke-test install.
+- [x] README: how to dev, test, build (minimal — only if you add a README later).
 
 ---
 

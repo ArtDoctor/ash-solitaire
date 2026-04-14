@@ -27,4 +27,9 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+  preview: {
+    port: 4173,
+    strictPort: true,
+    host: "127.0.0.1",
+  },
 }));
