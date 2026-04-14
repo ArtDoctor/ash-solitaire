@@ -201,6 +201,25 @@ html, body {
   cursor: pointer;
 }
 
+.settings-row--number {
+  align-items: center;
+  flex-wrap: wrap;
+  cursor: default;
+}
+
+.settings-row--number input[type="number"] {
+  width: 3.25rem;
+  margin-top: 0;
+  margin-left: auto;
+  padding: 6px 8px;
+  cursor: text;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 14px;
+}
+
 .settings-hint {
   font-size: 12px;
   color: var(--text-muted);
@@ -290,9 +309,62 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
+  /* Reserve space for fixed corner controls (same inset feel as former 16px padding) */
+  padding: 0 calc(16px + var(--header-h));
   background: var(--surface);
   border-bottom: 1px solid var(--border-subtle);
+  position: relative;
+  z-index: 2;
+}
+
+/* Full corner hit targets (like home .btn-close-app): pointer at screen corner clicks control */
+#btn-menu,
+#btn-restart {
+  position: fixed;
+  top: 0;
+  z-index: 10;
+  width: var(--header-h);
+  height: var(--header-h);
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  border-radius: 0;
+  background: var(--surface);
+  transition: background var(--transition), color var(--transition), border-color var(--transition);
+}
+
+#btn-menu {
+  left: 0;
+  border-width: 0 1px 1px 0;
+  border-radius: 0 0 6px 0;
+}
+
+#btn-restart {
+  right: 0;
+  border-width: 0 0 1px 1px;
+  border-radius: 0 0 0 6px;
+}
+
+#btn-menu:hover,
+#btn-restart:hover {
+  background: var(--surface-2);
+  border-color: var(--text-muted);
+}
+
+#btn-menu .label,
+#btn-restart .label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .header-title {

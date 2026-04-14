@@ -10,6 +10,14 @@ import {
   suitColor,
 } from "./cards.js";
 
+/** Rank spread at or above this value disables the auto-foundation balance check (legacy behavior). */
+export const AUTO_FOUNDATION_RANK_SPREAD_UNLIMITED = 12;
+
+export type AutoFoundationOptions = {
+  /** Max allowed (highest foundation top) − (lowest foundation top) among non-empty piles after the move. Default 12 (unlimited). */
+  maxFoundationRankSpread?: number;
+};
+
 export type Card = CardData;
 
 export interface GameState {
@@ -108,6 +116,32 @@ export function canMoveToFoundationPile(
     top.suit === card.suit &&
     RANK_VALUE[card.rank] === RANK_VALUE[top.rank] + 1
   );
+}
+
+/** Highest minus lowest rank among non-empty foundation tops (0 if fewer than two piles have cards). */
+export function foundationRankSpread(state: GameState): number {
+  const tops: number[] = [];
+  for (const pile of state.foundations) {
+    if (pile.length === 0) continue;
+    tops.push(RANK_VALUE[pile[pile.length - 1]!.rank]);
+  }
+  if (tops.length < 2) return 0;
+  return Math.max(...tops) - Math.min(...tops);
+}
+
+function isAutoFoundationMoveWithinSpread(
+  state: GameState,
+  pileIdx: number,
+  card: Card,
+  maxSpread: number,
+): boolean {
+  if (maxSpread >= AUTO_FOUNDATION_RANK_SPREAD_UNLIMITED) return true;
+  const piles = state.foundations.map((p) => p.slice());
+  const pile = piles[pileIdx]!;
+  if (!canMoveToFoundationPile(pile, card)) return false;
+  pile.push(card);
+  const next: GameState = { ...state, foundations: piles };
+  return foundationRankSpread(next) <= maxSpread;
 }
 
 export function canPlaceOnEmptyTableau(_contact: Card): boolean {
@@ -265,14 +299,23 @@ export function partialTableauAfterDealSteps(
 }
 
 /** Next automatic foundation move (waste → free cell → tableau left→right), if any. */
-export function peekNextAutoFoundationMove(state: GameState): {
+export function peekNextAutoFoundationMove(
+  state: GameState,
+  opts?: AutoFoundationOptions,
+): {
   source: MoveSource;
   target: MoveTarget;
 } | null {
+  const maxSpread =
+    opts?.maxFoundationRankSpread ?? AUTO_FOUNDATION_RANK_SPREAD_UNLIMITED;
+
   if (state.waste.length > 0) {
     const card = state.waste[state.waste.length - 1]!;
     const pileIdx = foundationIndexForSuit(card.suit);
-    if (canMoveToFoundationPile(state.foundations[pileIdx]!, card)) {
+    if (
+      canMoveToFoundationPile(state.foundations[pileIdx]!, card) &&
+      isAutoFoundationMoveWithinSpread(state, pileIdx, card, maxSpread)
+    ) {
       return {
         source: { kind: "waste" },
         target: { kind: "foundation", pile: pileIdx },
@@ -282,7 +325,10 @@ export function peekNextAutoFoundationMove(state: GameState): {
   if (state.stock.length === 0 && state.freeCell) {
     const card = state.freeCell;
     const pileIdx = foundationIndexForSuit(card.suit);
-    if (canMoveToFoundationPile(state.foundations[pileIdx]!, card)) {
+    if (
+      canMoveToFoundationPile(state.foundations[pileIdx]!, card) &&
+      isAutoFoundationMoveWithinSpread(state, pileIdx, card, maxSpread)
+    ) {
       return {
         source: { kind: "freeCell" },
         target: { kind: "foundation", pile: pileIdx },
@@ -295,6 +341,8 @@ export function peekNextAutoFoundationMove(state: GameState): {
     const card = col[col.length - 1]!;
     const pileIdx = foundationIndexForSuit(card.suit);
     if (!canMoveToFoundationPile(state.foundations[pileIdx]!, card)) continue;
+    if (!isAutoFoundationMoveWithinSpread(state, pileIdx, card, maxSpread))
+      continue;
     return {
       source: { kind: "tableau", col: c, start: col.length - 1 },
       target: { kind: "foundation", pile: pileIdx },
@@ -304,24 +352,33 @@ export function peekNextAutoFoundationMove(state: GameState): {
 }
 
 /** One legal foundation move: waste, then free cell, then tableau columns left→right */
-export function tryOneAutoFoundationMove(state: GameState): GameState | null {
-  const peek = peekNextAutoFoundationMove(state);
+export function tryOneAutoFoundationMove(
+  state: GameState,
+  opts?: AutoFoundationOptions,
+): GameState | null {
+  const peek = peekNextAutoFoundationMove(state, opts);
   if (!peek) return null;
   return tryApplyMove(state, peek.source, peek.target);
 }
 
-export function applyAutoFoundationChain(state: GameState): GameState {
+export function applyAutoFoundationChain(
+  state: GameState,
+  opts?: AutoFoundationOptions,
+): GameState {
   let s = state;
   for (let guard = 0; guard < 200; guard++) {
-    const next = tryOneAutoFoundationMove(s);
+    const next = tryOneAutoFoundationMove(s, opts);
     if (!next) break;
     s = next;
   }
   return s;
 }
 
-export function afterPlayerMove(state: GameState): GameState {
-  return applyAutoFoundationChain(state);
+export function afterPlayerMove(
+  state: GameState,
+  opts?: AutoFoundationOptions,
+): GameState {
+  return applyAutoFoundationChain(state, opts);
 }
 
 export function isWon(state: GameState): boolean {
@@ -331,27 +388,34 @@ export function isWon(state: GameState): boolean {
 export function tryDoubleClickFoundation(
   state: GameState,
   src: MoveSource,
+  opts?: AutoFoundationOptions,
 ): GameState | null {
+  const maxSpread =
+    opts?.maxFoundationRankSpread ?? AUTO_FOUNDATION_RANK_SPREAD_UNLIMITED;
+
   if (src.kind === "waste") {
     if (state.waste.length === 0) return null;
-    const pileIdx = foundationIndexForSuit(
-      state.waste[state.waste.length - 1]!.suit,
-    );
-    const m = tryApplyMove(state, src, { kind: "foundation", pile: pileIdx });
-    return m;
+    const card = state.waste[state.waste.length - 1]!;
+    const pileIdx = foundationIndexForSuit(card.suit);
+    if (!isAutoFoundationMoveWithinSpread(state, pileIdx, card, maxSpread))
+      return null;
+    return tryApplyMove(state, src, { kind: "foundation", pile: pileIdx });
   }
   if (src.kind === "freeCell") {
     if (state.stock.length > 0 || !state.freeCell) return null;
-    const pileIdx = foundationIndexForSuit(state.freeCell.suit);
-    const m = tryApplyMove(state, src, { kind: "foundation", pile: pileIdx });
-    return m;
+    const card = state.freeCell;
+    const pileIdx = foundationIndexForSuit(card.suit);
+    if (!isAutoFoundationMoveWithinSpread(state, pileIdx, card, maxSpread))
+      return null;
+    return tryApplyMove(state, src, { kind: "foundation", pile: pileIdx });
   }
   const col = state.tableau[src.col];
   if (!col || src.start !== col.length - 1) return null;
   const card = col[col.length - 1]!;
   const pileIdx = foundationIndexForSuit(card.suit);
-  const m = tryApplyMove(state, src, { kind: "foundation", pile: pileIdx });
-  return m;
+  if (!isAutoFoundationMoveWithinSpread(state, pileIdx, card, maxSpread))
+    return null;
+  return tryApplyMove(state, src, { kind: "foundation", pile: pileIdx });
 }
 
 /** New deal plus any immediately legal foundation moves (aces, etc.). */

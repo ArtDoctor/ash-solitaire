@@ -13,6 +13,7 @@ import {
   isValidDescendingRun,
   isWon,
   mulberry32,
+  peekNextAutoFoundationMove,
   shuffle,
   tryApplyMove,
   type GameState,
@@ -211,5 +212,30 @@ describe("auto foundation chain", () => {
     const g = dealNewGame(mulberry32(1));
     const out = applyAutoFoundationChain(g);
     expect(out).toBeDefined();
+  });
+});
+
+describe("auto foundation rank spread", () => {
+  it("skips the next auto move when it would widen foundation tops beyond max spread", () => {
+    const g: GameState = {
+      tableau: [[], [], [], [], [], [], []],
+      foundations: [
+        [
+          { rank: "A", suit: "♠" },
+          { rank: "2", suit: "♠" },
+          { rank: "3", suit: "♠" },
+        ],
+        [{ rank: "A", suit: "♥" }],
+        [{ rank: "A", suit: "♦" }],
+        [{ rank: "A", suit: "♣" }],
+      ],
+      stock: [],
+      waste: [{ rank: "4", suit: "♠" }],
+      freeCell: null,
+    };
+    expect(peekNextAutoFoundationMove(g, { maxFoundationRankSpread: 2 })).toBeNull();
+    expect(
+      peekNextAutoFoundationMove(g, { maxFoundationRankSpread: 3 }),
+    ).not.toBeNull();
   });
 });

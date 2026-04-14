@@ -20,6 +20,7 @@ import {
   peekNextAutoFoundationMove,
   tryApplyMove,
   tryDoubleClickFoundation,
+  type AutoFoundationOptions,
   type GameState,
   type MoveSource,
   type MoveTarget,
@@ -29,6 +30,8 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 const WINS_KEY = "solitaire-wins";
 const GAME_FULLSCREEN_KEY = "solitaire-game-borderless-fullscreen";
 const HIDE_STATIONARY_DRAG_SOURCE_KEY = "solitaire-hide-stationary-drag-source";
+const AUTO_FOUNDATION_MAX_RANK_SPREAD_KEY =
+  "solitaire-auto-foundation-max-rank-spread";
 
 type ScreenId = "home" | "settings" | "game";
 
@@ -140,6 +143,22 @@ function saveHideStationaryDragSourcePref(on: boolean): void {
   localStorage.setItem(HIDE_STATIONARY_DRAG_SOURCE_KEY, on ? "true" : "false");
 }
 
+/** Max (highest foundation top) − (lowest foundation top) for automated / double-click moves to foundations; 0–12 (12 = no limit). */
+function loadAutoFoundationMaxRankSpread(): number {
+  const raw = localStorage.getItem(AUTO_FOUNDATION_MAX_RANK_SPREAD_KEY);
+  const n = raw === null ? 2 : parseInt(raw, 10);
+  if (!Number.isFinite(n)) return 2;
+  return Math.min(12, Math.max(0, Math.round(n)));
+}
+
+function saveAutoFoundationMaxRankSpread(n: number): void {
+  localStorage.setItem(AUTO_FOUNDATION_MAX_RANK_SPREAD_KEY, String(n));
+}
+
+function autoFoundationOpts(): AutoFoundationOptions {
+  return { maxFoundationRankSpread: loadAutoFoundationMaxRankSpread() };
+}
+
 async function applyWindowGameFullscreen(enabled: boolean): Promise<void> {
   if (!isTauri()) return;
   await invoke("set_game_fullscreen", { enabled });
@@ -159,6 +178,10 @@ function syncSettingsCheckbox(): void {
     "setting-hide-stationary-drag-source",
   ) as HTMLInputElement | null;
   if (hideStationary) hideStationary.checked = loadHideStationaryDragSourcePref();
+  const maxSpread = document.getElementById(
+    "setting-auto-foundation-max-rank-spread",
+  ) as HTMLInputElement | null;
+  if (maxSpread) maxSpread.value = String(loadAutoFoundationMaxRankSpread());
 }
 
 function shake(el: HTMLElement): void {
@@ -600,25 +623,20 @@ function onGlobalPointerUpCancelHandler(): void {
 // ─── Card flight animations (sequential) ─────────────────────────────────────
 
 const FLY_MS_DEAL = 88;
-const FLY_MS_FOUNDATION = 380;
+const FLY_MS_FOUNDATION = 260;
 /** Player drop: ghost → pile */
-const FLY_MS_PLAYER_MOVE = 320;
+const FLY_MS_PLAYER_MOVE = 220;
 const WASTE_DRAW_BASE_MS = 260;
 const WASTE_DRAW_STAGGER_MS = 70;
+const FLY_SETTLE_RATIO_PLAYER = 0.82;
+const FLY_SETTLE_RATIO_FOUNDATION = 0.8;
+/** Spawn placement ripple this many ms before the flight ends (at destination, not on the ghost). */
+const DROP_RIPPLE_LEAD_MS = 200;
 
 type Rect = { left: number; top: number; width: number; height: number };
 
 function toRect(el: DOMRect): Rect {
   return { left: el.left, top: el.top, width: el.width, height: el.height };
-}
-
-function foundationSlotRect(pile: number): Rect | null {
-  const el = document.getElementById(`foundation-${pile}`);
-  if (!el) return null;
-  const r = el.getBoundingClientRect();
-  const cw = cssLengthVarPx("--card-w", "width");
-  const ch = cssLengthVarPx("--card-h", "height");
-  return { left: r.left, top: r.top, width: cw, height: ch };
 }
 
 function tableauSlotRect(col: number, depth: number): Rect | null {
@@ -664,25 +682,14 @@ function rectForMoveSource(src: MoveSource): Rect | null {
   return toRect(last.getBoundingClientRect());
 }
 
-function elementForMoveSource(src: MoveSource): HTMLElement | null {
-  if (src.kind === "waste") {
-    const waste = document.getElementById("waste");
-    return waste?.querySelector<HTMLElement>(".waste-card:last-child") ?? null;
-  }
-  if (src.kind === "freeCell") {
-    const stock = document.getElementById("stock");
-    return stock?.querySelector<HTMLElement>(".card") ?? null;
-  }
-  const col = document.getElementById(`tableau-${src.col}`);
-  const cards = col?.querySelectorAll<HTMLElement>(".card");
-  if (!cards?.length) return null;
-  return cards[cards.length - 1] ?? null;
-}
-
 function rectsFromDragGhost(ghost: HTMLElement): Rect[] {
   return [...ghost.querySelectorAll<HTMLElement>(".drag-ghost-stack .card")].map((el) =>
     toRect(el.getBoundingClientRect()),
   );
+}
+
+function rectsFromElements(elements: HTMLElement[]): Rect[] {
+  return elements.map((el) => toRect(el.getBoundingClientRect()));
 }
 
 /** Cards that ended up on `target` after `renderGame` (same order as `peekMovingCards` had). */
@@ -707,6 +714,24 @@ function destinationCardElements(target: MoveTarget, stackLen: number): HTMLElem
     const out: HTMLElement[] = [];
     for (let i = n - stackLen; i < n; i++) out.push(all[i]!);
     return out.length === stackLen ? out : null;
+  }
+  return null;
+}
+
+/**
+ * After an auto foundation move, the new top card at the source pile (what was beneath
+ * the moved card). Hidden during the flight so it does not show in the same slot as the ghost.
+ */
+function autoFoundationExposeCoverElement(source: MoveSource): HTMLElement | null {
+  if (source.kind === "tableau") {
+    const col = document.getElementById(`tableau-${source.col}`);
+    const all = col?.querySelectorAll<HTMLElement>(".card");
+    if (!all?.length) return null;
+    return all[all.length - 1]!;
+  }
+  if (source.kind === "waste") {
+    const waste = document.getElementById("waste");
+    return waste?.querySelector<HTMLElement>(".waste-card:last-child") ?? null;
   }
   return null;
 }
@@ -770,8 +795,11 @@ async function flyPlayerMoveToDestination(
           fromRects[i]!,
           toRects[i]!,
           FLY_MS_PLAYER_MOVE,
-          rippleColor,
-          i === 0 ? clearDropPreviewOnce : undefined,
+          {
+            rippleColor,
+            settleRatio: FLY_SETTLE_RATIO_PLAYER,
+            onSettle: i === 0 ? clearDropPreviewOnce : undefined,
+          },
         ),
       ),
     );
@@ -799,10 +827,46 @@ async function flyPlayerMoveToSource(
 
   try {
     await Promise.all(
-      cards.map((card, i) => flyCard(card, fromRects[i]!, toRects[i]!, FLY_MS_PLAYER_MOVE)),
+      cards.map((card, i) =>
+        flyCard(card, fromRects[i]!, toRects[i]!, FLY_MS_PLAYER_MOVE, {
+          settleRatio: FLY_SETTLE_RATIO_PLAYER,
+        }),
+      ),
     );
   } finally {
     dest.forEach((el) => el.classList.remove("card--auto-flight-source"));
+  }
+}
+
+async function flyCommittedFoundationMove(
+  card: CardData,
+  from: Rect,
+  target: MoveTarget,
+  source: MoveSource,
+): Promise<void> {
+  const dest = destinationCardElements(target, 1);
+  if (!dest || dest.length !== 1) return;
+
+  const exposeCover = autoFoundationExposeCoverElement(source);
+
+  dest[0]!.classList.add("card--auto-flight-source");
+  exposeCover?.classList.add("card--auto-flight-source");
+  void dest[0]!.offsetHeight;
+  const to = rectsFromElements(dest)[0];
+  if (!to) {
+    dest[0]!.classList.remove("card--auto-flight-source");
+    exposeCover?.classList.remove("card--auto-flight-source");
+    return;
+  }
+
+  try {
+    await flyCard(card, from, to, FLY_MS_FOUNDATION, {
+      rippleColor: "rgba(110,168,255,0.9)",
+      settleRatio: FLY_SETTLE_RATIO_FOUNDATION,
+    });
+  } finally {
+    dest[0]!.classList.remove("card--auto-flight-source");
+    exposeCover?.classList.remove("card--auto-flight-source");
   }
 }
 
@@ -834,8 +898,12 @@ function flyCard(
   from: Rect,
   to: Rect,
   durationMs: number,
-  rippleColor?: string,
-  onBeforeFlightTransition?: () => void,
+  options?: {
+    rippleColor?: string;
+    settleRatio?: number;
+    onBeforeFlightTransition?: () => void;
+    onSettle?: () => void;
+  },
 ): Promise<void> {
   const ghost = createCardEl(card);
   ghost.classList.add("card-flight-ghost");
@@ -847,8 +915,10 @@ function flyCard(
   void ghost.offsetWidth;
   const ease = "cubic-bezier(.22,.9,.32,1)";
   const tr = `left ${durationMs}ms ${ease}, top ${durationMs}ms ${ease}, width ${durationMs}ms ${ease}, height ${durationMs}ms ${ease}`;
+  const settleRatio = clamp01(options?.settleRatio ?? 1);
+  const settleMs = Math.max(0, Math.round(durationMs * settleRatio));
   requestAnimationFrame(() => {
-    onBeforeFlightTransition?.();
+    options?.onBeforeFlightTransition?.();
     ghost.style.transition = tr;
     ghost.style.left = `${to.left}px`;
     ghost.style.top = `${to.top}px`;
@@ -857,11 +927,31 @@ function flyCard(
   });
   return new Promise((resolve) => {
     let settled = false;
+    let rippleSpawned = false;
+    let rippleTimer: ReturnType<typeof setTimeout> | null = null;
+    const color = options?.rippleColor;
+    const spawnRippleOnce = (): void => {
+      if (!color || rippleSpawned) return;
+      rippleSpawned = true;
+      spawnDropRipple(to, color);
+    };
+    if (color) {
+      const delay = Math.max(0, durationMs - DROP_RIPPLE_LEAD_MS);
+      rippleTimer = window.setTimeout(() => {
+        rippleTimer = null;
+        if (!settled) spawnRippleOnce();
+      }, delay);
+    }
     const done = (): void => {
       if (settled) return;
       settled = true;
+      if (rippleTimer !== null) {
+        window.clearTimeout(rippleTimer);
+        rippleTimer = null;
+      }
       ghost.remove();
-      if (rippleColor) spawnDropRipple(to, rippleColor);
+      options?.onSettle?.();
+      spawnRippleOnce();
       resolve();
     };
     const onEnd = (e: TransitionEvent): void => {
@@ -869,6 +959,7 @@ function flyCard(
       done();
     };
     ghost.addEventListener("transitionend", onEnd);
+    window.setTimeout(done, settleMs + 34);
     window.setTimeout(done, durationMs + 80);
   });
 }
@@ -899,34 +990,18 @@ function getRenderSnapshot(): { view: GameState; stockCount: number } {
 async function runAutoFoundationChainAnimation(expectedEpoch: number): Promise<void> {
   for (;;) {
     if (expectedEpoch !== animEpoch) return;
-    const next = peekNextAutoFoundationMove(gameState);
+    const next = peekNextAutoFoundationMove(gameState, autoFoundationOpts());
     if (!next || next.target.kind !== "foundation") break;
     const card = peekMovingCards(gameState, next.source)?.[0];
     if (!card) break;
     const from = rectForMoveSource(next.source);
-    const to = foundationSlotRect(next.target.pile);
-    if (!from || !to) {
-      const applied = tryApplyMove(gameState, next.source, next.target);
-      if (!applied) break;
-      gameState = applied;
-      renderGame();
-      continue;
-    }
-    const sourceEl = elementForMoveSource(next.source);
-    sourceEl?.classList.add("card--auto-flight-source");
-    void sourceEl?.offsetHeight;
-    await flyCard(card, from, to, FLY_MS_FOUNDATION, "rgba(110,168,255,0.9)");
-    if (expectedEpoch !== animEpoch) {
-      sourceEl?.classList.remove("card--auto-flight-source");
-      return;
-    }
     const applied = tryApplyMove(gameState, next.source, next.target);
-    if (!applied) {
-      sourceEl?.classList.remove("card--auto-flight-source");
-      break;
-    }
+    if (!applied) break;
     gameState = applied;
     renderGame();
+    if (!from) continue;
+    await flyCommittedFoundationMove(card, from, next.target, next.source);
+    if (expectedEpoch !== animEpoch) return;
   }
 }
 
@@ -1205,7 +1280,11 @@ async function onStockClick(): Promise<void> {
 async function onWasteDoubleClick(): Promise<void> {
   if (animBusy) return;
   const opEpoch = animEpoch;
-  const next = tryDoubleClickFoundation(gameState, { kind: "waste" });
+  const next = tryDoubleClickFoundation(
+    gameState,
+    { kind: "waste" },
+    autoFoundationOpts(),
+  );
   if (!next) return;
   gameState = next;
   checkWin();
@@ -1223,7 +1302,11 @@ async function onWasteDoubleClick(): Promise<void> {
 async function onFreeCellDoubleClick(): Promise<void> {
   if (animBusy) return;
   const opEpoch = animEpoch;
-  const next = tryDoubleClickFoundation(gameState, { kind: "freeCell" });
+  const next = tryDoubleClickFoundation(
+    gameState,
+    { kind: "freeCell" },
+    autoFoundationOpts(),
+  );
   if (!next) return;
   gameState = next;
   checkWin();
@@ -1241,11 +1324,15 @@ async function onFreeCellDoubleClick(): Promise<void> {
 async function onTableauDoubleClick(col: number, idx: number): Promise<void> {
   if (animBusy) return;
   const opEpoch = animEpoch;
-  const next = tryDoubleClickFoundation(gameState, {
-    kind: "tableau",
-    col,
-    start: idx,
-  });
+  const next = tryDoubleClickFoundation(
+    gameState,
+    {
+      kind: "tableau",
+      col,
+      start: idx,
+    },
+    autoFoundationOpts(),
+  );
   if (!next) return;
   gameState = next;
   checkWin();
@@ -1307,6 +1394,9 @@ window.addEventListener("DOMContentLoaded", () => {
   if (localStorage.getItem(GAME_FULLSCREEN_KEY) === null) {
     saveGameFullscreenPref(true);
   }
+  if (localStorage.getItem(AUTO_FOUNDATION_MAX_RANK_SPREAD_KEY) === null) {
+    saveAutoFoundationMaxRankSpread(2);
+  }
 
   document.getElementById("btn-play")?.addEventListener("click", () => {
     void startGame();
@@ -1335,6 +1425,18 @@ window.addEventListener("DOMContentLoaded", () => {
     ?.addEventListener("change", (e) => {
       const el = e.target as HTMLInputElement;
       saveHideStationaryDragSourcePref(el.checked);
+    });
+
+  document
+    .getElementById("setting-auto-foundation-max-rank-spread")
+    ?.addEventListener("change", (e) => {
+      const el = e.target as HTMLInputElement;
+      const v = parseInt(el.value, 10);
+      const clamped = Number.isFinite(v)
+        ? Math.min(12, Math.max(0, Math.round(v)))
+        : 2;
+      el.value = String(clamped);
+      saveAutoFoundationMaxRankSpread(clamped);
     });
 
   showScreen("home");

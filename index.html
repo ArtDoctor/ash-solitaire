@@ -54,6 +54,22 @@
           When on, the original stack in the layout is hidden during a drag so only the moving cards
           under your pointer are visible. When off, those cards stay as a dimmed placeholder.
         </p>
+        <label class="settings-row settings-row--number">
+          <span>Auto-play to foundations: max rank spread</span>
+          <input
+            type="number"
+            id="setting-auto-foundation-max-rank-spread"
+            min="0"
+            max="12"
+            step="1"
+            value="2"
+          />
+        </label>
+        <p class="settings-hint">
+          Automated and double-click moves to the foundation piles only run when the difference
+          between the highest and lowest top card on the four foundations would stay at or below this
+          value after the move (so one suit cannot race far ahead). Use 12 for no limit. Default is 2.
+        </p>
         <button id="btn-settings-back" type="button" class="btn-primary">Back</button>
       </div>
     </div>
