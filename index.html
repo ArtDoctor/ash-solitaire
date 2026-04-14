@@ -48,12 +48,12 @@
           When off, the app uses a normal window. When on, the window is borderless fullscreen.
         </p>
         <label class="settings-row">
-          <input type="checkbox" id="setting-no-drag-ghost-clones" />
-          <span>Hide floating card copies while dragging</span>
+          <input type="checkbox" id="setting-hide-stationary-drag-source" />
+          <span>Hide in-place card copies while dragging</span>
         </label>
         <p class="settings-hint">
-          When on, only the dimmed cards in the layout are shown during a drag — no duplicate stack
-          follows the pointer.
+          When on, the original stack in the layout is hidden during a drag so only the moving cards
+          under your pointer are visible. When off, those cards stay as a dimmed placeholder.
         </p>
         <button id="btn-settings-back" type="button" class="btn-primary">Back</button>
       </div>

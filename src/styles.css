@@ -483,11 +483,6 @@ body.anim-busy .card:hover {
   filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.45));
 }
 
-/* Setting: hide duplicate stack during drag (ghost stays in DOM for layout / animations) */
-body.no-drag-ghost-clones .drag-ghost {
-  visibility: hidden;
-}
-
 /* Animated deal / auto-foundation flights */
 .card.card-flight-ghost {
   position: fixed;
@@ -514,6 +509,13 @@ body.no-drag-ghost-clones .drag-ghost {
 .card.drag-source-dim {
   opacity: 0.42;
   transition: opacity 0.12s ease;
+  pointer-events: none;
+}
+
+/* Setting: no dimmed placeholder — source cards fully hidden while drag ghost is shown */
+.card.drag-source-hidden {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 /* ================================================================

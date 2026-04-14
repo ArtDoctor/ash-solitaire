@@ -27,7 +27,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 
 const WINS_KEY = "solitaire-wins";
 const GAME_FULLSCREEN_KEY = "solitaire-game-borderless-fullscreen";
-const NO_DRAG_GHOST_CLONES_KEY = "solitaire-no-drag-ghost-clones";
+const HIDE_STATIONARY_DRAG_SOURCE_KEY = "solitaire-hide-stationary-drag-source";
 
 type ScreenId = "home" | "settings" | "game";
 
@@ -56,10 +56,8 @@ function setAnimBusy(busy: boolean): void {
 const DRAG_START_PX = 6;
 /** Radius at which gravity toward a valid target starts to influence the ghost. */
 const GRAVITY_RADIUS_PX = 170;
-/** Below this pull value, we don't even consider the target "engaged" (no preview). */
+/** Below this pull value, we don't consider the target "engaged" (no preview). Same threshold on release so a highlighted drop commits. */
 const GRAVITY_PREVIEW_MIN = 0.12;
-/** On release, commit to gravity target only if pull is at least this. */
-const GRAVITY_COMMIT_MIN = 0.45;
 
 type ScreenPoint = { x: number; y: number };
 
@@ -121,16 +119,12 @@ function saveGameFullscreenPref(on: boolean): void {
   localStorage.setItem(GAME_FULLSCREEN_KEY, on ? "true" : "false");
 }
 
-function loadNoDragGhostClonesPref(): boolean {
-  return localStorage.getItem(NO_DRAG_GHOST_CLONES_KEY) === "true";
+function loadHideStationaryDragSourcePref(): boolean {
+  return localStorage.getItem(HIDE_STATIONARY_DRAG_SOURCE_KEY) === "true";
 }
 
-function saveNoDragGhostClonesPref(on: boolean): void {
-  localStorage.setItem(NO_DRAG_GHOST_CLONES_KEY, on ? "true" : "false");
-}
-
-function applyNoDragGhostClonesPref(): void {
-  document.body.classList.toggle("no-drag-ghost-clones", loadNoDragGhostClonesPref());
+function saveHideStationaryDragSourcePref(on: boolean): void {
+  localStorage.setItem(HIDE_STATIONARY_DRAG_SOURCE_KEY, on ? "true" : "false");
 }
 
 async function applyWindowGameFullscreen(enabled: boolean): Promise<void> {
@@ -148,10 +142,10 @@ function syncSettingsCheckbox(): void {
     "setting-game-fullscreen",
   ) as HTMLInputElement | null;
   if (fullscreen) fullscreen.checked = loadGameFullscreenPref();
-  const noClones = document.getElementById(
-    "setting-no-drag-ghost-clones",
+  const hideStationary = document.getElementById(
+    "setting-hide-stationary-drag-source",
   ) as HTMLInputElement | null;
-  if (noClones) noClones.checked = loadNoDragGhostClonesPref();
+  if (hideStationary) hideStationary.checked = loadHideStationaryDragSourcePref();
 }
 
 function shake(el: HTMLElement): void {
@@ -399,7 +393,9 @@ function positionGhost(session: DragSession, clientX: number, clientY: number, h
 
 function endDrag(options?: { keepGhost?: boolean }): void {
   if (!drag) return;
-  for (const el of drag.dimEls) el.classList.remove("drag-source-dim");
+  for (const el of drag.dimEls) {
+    el.classList.remove("drag-source-dim", "drag-source-hidden");
+  }
   if (!options?.keepGhost) drag.ghost.remove();
   document.body.classList.remove("is-dragging");
   clearDropPreview();
@@ -452,7 +448,10 @@ function startDragFromPending(): DragSession | null {
   };
   drag = session;
   document.body.classList.add("is-dragging");
-  for (const el of dimEls) el.classList.add("drag-source-dim");
+  for (const el of dimEls) {
+    if (loadHideStationaryDragSourcePref()) el.classList.add("drag-source-hidden");
+    else el.classList.add("drag-source-dim");
+  }
   positionGhost(session, start.x, start.y, null);
 
   const cleanupPointers = () => {
@@ -493,11 +492,17 @@ function startDragFromPending(): DragSession | null {
     const hitRelease = findGravity(e.clientX, e.clientY, current);
     positionGhost(current, e.clientX, e.clientY, hitRelease);
 
-    // Priority: explicit pointer-over target > strong gravity pull
+    // Priority: explicit pointer-over target > gravity pull (same threshold as drop preview)
     const underPointer = targetUnderPointer(e.clientX, e.clientY, current);
     let target: MoveTarget | null = underPointer;
-    if (!target && hitRelease && hitRelease.pull >= GRAVITY_COMMIT_MIN) {
+    if (!target && hitRelease && hitRelease.pull >= GRAVITY_PREVIEW_MIN) {
       target = hitRelease.target;
+    }
+    // Last frame may have shown preview while release position barely misses pull (no move event in between).
+    if (!target && current.previewTarget) {
+      if (tryApplyMove(gameState, current.source, current.previewTarget)) {
+        target = current.previewTarget;
+      }
     }
 
     let didMove: GameState | null = null;
@@ -1219,14 +1224,12 @@ window.addEventListener("DOMContentLoaded", () => {
     });
 
   document
-    .getElementById("setting-no-drag-ghost-clones")
+    .getElementById("setting-hide-stationary-drag-source")
     ?.addEventListener("change", (e) => {
       const el = e.target as HTMLInputElement;
-      saveNoDragGhostClonesPref(el.checked);
-      applyNoDragGhostClonesPref();
+      saveHideStationaryDragSourcePref(el.checked);
     });
 
-  applyNoDragGhostClonesPref();
   showScreen("home");
   void applyWindowGameFullscreen(loadGameFullscreenPref());
 });
