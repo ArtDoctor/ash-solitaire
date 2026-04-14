@@ -209,13 +209,21 @@ function checkWin(): void {
 
 function createDragGhost(cards: CardData[]): HTMLElement {
   const overlap = cssLengthVarPx("--col-overlap", "height");
+  const cardH = cssLengthVarPx("--card-h", "height");
+  const cardW = cssLengthVarPx("--card-w", "width");
   const inner = document.createElement("div");
   inner.className = "drag-ghost-stack";
+  if (cards.length > 0) {
+    const totalH = (cards.length - 1) * overlap + cardH;
+    inner.style.width = `${cardW}px`;
+    inner.style.minHeight = `${totalH}px`;
+  }
   cards.forEach((card, i) => {
     const c = createCardEl(card);
     c.style.position = "absolute";
     c.style.left = "0";
     c.style.top = `${i * overlap}px`;
+    c.style.zIndex = String(i + 1);
     c.style.pointerEvents = "none";
     inner.appendChild(c);
   });
@@ -526,6 +534,9 @@ function startDragFromPending(): DragSession | null {
     renderGame();
 
     if (didMove && committedTarget && dropFromRects) {
+      // `endDrag` cleared drop-preview; restore until the flight transition starts so the slot outline
+      // does not disappear for ~one pulse cycle before the ghost moves.
+      setDropPreview(committedTarget);
       setAnimBusy(true);
       const dropEpoch = animEpoch;
       void (async () => {
@@ -743,9 +754,25 @@ async function flyPlayerMoveToDestination(
       ? "rgba(110,168,255,0.9)"
       : "rgba(255,255,255,0.6)";
 
+  let clearedDropPreview = false;
+  const clearDropPreviewOnce = (): void => {
+    if (clearedDropPreview) return;
+    clearedDropPreview = true;
+    clearDropPreview();
+  };
+
   try {
     await Promise.all(
-      cards.map((card, i) => flyCard(card, fromRects[i]!, toRects[i]!, FLY_MS_PLAYER_MOVE, rippleColor)),
+      cards.map((card, i) =>
+        flyCard(
+          card,
+          fromRects[i]!,
+          toRects[i]!,
+          FLY_MS_PLAYER_MOVE,
+          rippleColor,
+          i === 0 ? clearDropPreviewOnce : undefined,
+        ),
+      ),
     );
   } finally {
     dest.forEach((el) => el.classList.remove("card--auto-flight-source"));
@@ -801,7 +828,14 @@ function spawnDropRipple(rect: Rect, color: string): void {
   el.addEventListener("animationend", () => el.remove(), { once: true });
 }
 
-function flyCard(card: CardData, from: Rect, to: Rect, durationMs: number, rippleColor?: string): Promise<void> {
+function flyCard(
+  card: CardData,
+  from: Rect,
+  to: Rect,
+  durationMs: number,
+  rippleColor?: string,
+  onBeforeFlightTransition?: () => void,
+): Promise<void> {
   const ghost = createCardEl(card);
   ghost.classList.add("card-flight-ghost");
   ghost.style.left = `${from.left}px`;
@@ -813,6 +847,7 @@ function flyCard(card: CardData, from: Rect, to: Rect, durationMs: number, rippl
   const ease = "cubic-bezier(.22,.9,.32,1)";
   const tr = `left ${durationMs}ms ${ease}, top ${durationMs}ms ${ease}, width ${durationMs}ms ${ease}, height ${durationMs}ms ${ease}`;
   requestAnimationFrame(() => {
+    onBeforeFlightTransition?.();
     ghost.style.transition = tr;
     ghost.style.left = `${to.left}px`;
     ghost.style.top = `${to.top}px`;
@@ -828,8 +863,12 @@ function flyCard(card: CardData, from: Rect, to: Rect, durationMs: number, rippl
       if (rippleColor) spawnDropRipple(to, rippleColor);
       resolve();
     };
-    ghost.addEventListener("transitionend", done, { once: true });
-    window.setTimeout(done, durationMs + 400);
+    const onEnd = (e: TransitionEvent): void => {
+      if (e.target !== ghost) return;
+      done();
+    };
+    ghost.addEventListener("transitionend", onEnd);
+    window.setTimeout(done, durationMs + 80);
   });
 }
 

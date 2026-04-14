@@ -481,8 +481,6 @@ body.anim-busy .card:hover {
   top: 0;
   z-index: 1000;
   margin: 0;
-  filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.62));
-  transition: filter 120ms ease;
 }
 
 /* Animated deal / auto-foundation flights */
@@ -506,6 +504,52 @@ body.anim-busy .card:hover {
 
 .drag-ghost-stack {
   position: relative;
+  isolation: isolate;
+  border-radius: var(--card-radius);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.62);
+}
+
+@keyframes drag-glow-red {
+  0%, 100% {
+    text-shadow:
+      0 0 4px rgba(255, 92, 92, 0.28),
+      0 0 8px rgba(255, 92, 92, 0.1);
+  }
+  50% {
+    text-shadow:
+      0 0 10px rgba(255, 92, 92, 0.65),
+      0 0 18px rgba(255, 92, 92, 0.32);
+  }
+}
+
+@keyframes drag-glow-black {
+  0%, 100% {
+    text-shadow:
+      0 0 3px rgba(230, 237, 243, 0.22),
+      0 0 7px rgba(230, 237, 243, 0.08);
+  }
+  50% {
+    text-shadow:
+      0 0 8px rgba(230, 237, 243, 0.55),
+      0 0 15px rgba(230, 237, 243, 0.28);
+  }
+}
+
+/* Slight glow on ranks and suit symbols while dragging (pulses while ghost is visible) */
+.drag-ghost .card.red .card-corner-rank,
+.drag-ghost .card.red .card-corner-suit,
+.drag-ghost .card.red .pip,
+.drag-ghost .card.red .face-rank,
+.drag-ghost .card.red .face-emblem {
+  animation: drag-glow-red 1.35s ease-in-out infinite;
+}
+
+.drag-ghost .card.black .card-corner-rank,
+.drag-ghost .card.black .card-corner-suit,
+.drag-ghost .card.black .pip,
+.drag-ghost .card.black .face-rank,
+.drag-ghost .card.black .face-emblem {
+  animation: drag-glow-black 1.35s ease-in-out infinite;
 }
 
 .card.drag-source-dim {
@@ -799,7 +843,6 @@ body.anim-busy .card:hover {
 
 .waste-card--under {
   pointer-events: none;
-  filter: brightness(.85);
 }
 
 @keyframes waste-draw-in {
