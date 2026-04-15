@@ -14,7 +14,7 @@ import {
 export const AUTO_FOUNDATION_RANK_SPREAD_UNLIMITED = 12;
 
 export type AutoFoundationOptions = {
-  /** Max allowed (highest foundation top) − (lowest foundation top) among non-empty piles after the move. Default 12 (unlimited). */
+  /** Max allowed (highest foundation top) − (lowest foundation top) after the move. Empty foundations count as 0, so the limit also prevents one suit racing ahead while another has no Ace yet. Default 12 (unlimited). */
   maxFoundationRankSpread?: number;
 };
 
@@ -118,14 +118,11 @@ export function canMoveToFoundationPile(
   );
 }
 
-/** Highest minus lowest rank among non-empty foundation tops (0 if fewer than two piles have cards). */
+/** Highest minus lowest rank across all four foundation tops; empty piles count as 0. */
 export function foundationRankSpread(state: GameState): number {
-  const tops: number[] = [];
-  for (const pile of state.foundations) {
-    if (pile.length === 0) continue;
-    tops.push(RANK_VALUE[pile[pile.length - 1]!.rank]);
-  }
-  if (tops.length < 2) return 0;
+  const tops: number[] = state.foundations.map((pile) =>
+    pile.length === 0 ? 0 : RANK_VALUE[pile[pile.length - 1]!.rank],
+  );
   return Math.max(...tops) - Math.min(...tops);
 }
 
@@ -298,7 +295,11 @@ export function partialTableauAfterDealSteps(
   return t;
 }
 
-/** Next automatic foundation move (waste → free cell → tableau left→right), if any. */
+/**
+ * Next automatic foundation move, if any. Picks the lowest-rank eligible card
+ * across waste, free cell, and tableau tops so foundations stay balanced.
+ * Ties break by source order (waste → free cell → tableau left→right).
+ */
 export function peekNextAutoFoundationMove(
   state: GameState,
   opts?: AutoFoundationOptions,
@@ -309,46 +310,48 @@ export function peekNextAutoFoundationMove(
   const maxSpread =
     opts?.maxFoundationRankSpread ?? AUTO_FOUNDATION_RANK_SPREAD_UNLIMITED;
 
-  if (state.waste.length > 0) {
-    const card = state.waste[state.waste.length - 1]!;
+  type Cand = {
+    source: MoveSource;
+    target: MoveTarget;
+    rank: number;
+    order: number;
+  };
+  const cands: Cand[] = [];
+  let order = 0;
+
+  const consider = (card: Card, source: MoveSource): void => {
     const pileIdx = foundationIndexForSuit(card.suit);
-    if (
-      canMoveToFoundationPile(state.foundations[pileIdx]!, card) &&
-      isAutoFoundationMoveWithinSpread(state, pileIdx, card, maxSpread)
-    ) {
-      return {
-        source: { kind: "waste" },
-        target: { kind: "foundation", pile: pileIdx },
-      };
-    }
+    if (!canMoveToFoundationPile(state.foundations[pileIdx]!, card)) return;
+    if (!isAutoFoundationMoveWithinSpread(state, pileIdx, card, maxSpread))
+      return;
+    cands.push({
+      source,
+      target: { kind: "foundation", pile: pileIdx },
+      rank: RANK_VALUE[card.rank],
+      order: order++,
+    });
+  };
+
+  if (state.waste.length > 0) {
+    consider(state.waste[state.waste.length - 1]!, { kind: "waste" });
   }
   if (state.stock.length === 0 && state.freeCell) {
-    const card = state.freeCell;
-    const pileIdx = foundationIndexForSuit(card.suit);
-    if (
-      canMoveToFoundationPile(state.foundations[pileIdx]!, card) &&
-      isAutoFoundationMoveWithinSpread(state, pileIdx, card, maxSpread)
-    ) {
-      return {
-        source: { kind: "freeCell" },
-        target: { kind: "foundation", pile: pileIdx },
-      };
-    }
+    consider(state.freeCell, { kind: "freeCell" });
   }
   for (let c = 0; c < 7; c++) {
     const col = state.tableau[c];
     if (!col || col.length === 0) continue;
-    const card = col[col.length - 1]!;
-    const pileIdx = foundationIndexForSuit(card.suit);
-    if (!canMoveToFoundationPile(state.foundations[pileIdx]!, card)) continue;
-    if (!isAutoFoundationMoveWithinSpread(state, pileIdx, card, maxSpread))
-      continue;
-    return {
-      source: { kind: "tableau", col: c, start: col.length - 1 },
-      target: { kind: "foundation", pile: pileIdx },
-    };
+    consider(col[col.length - 1]!, {
+      kind: "tableau",
+      col: c,
+      start: col.length - 1,
+    });
   }
-  return null;
+
+  if (cands.length === 0) return null;
+  cands.sort((a, b) => a.rank - b.rank || a.order - b.order);
+  const best = cands[0]!;
+  return { source: best.source, target: best.target };
 }
 
 /** One legal foundation move: waste, then free cell, then tableau columns left→right */

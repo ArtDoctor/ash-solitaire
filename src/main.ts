@@ -824,6 +824,7 @@ async function flyCommittedFoundationMove(
   card: CardData,
   from: Rect,
   target: MoveTarget,
+  prevTop: CardData | null,
 ): Promise<void> {
   const dest = destinationCardElements(target, 1);
   if (!dest || dest.length !== 1) return;
@@ -836,13 +837,38 @@ async function flyCommittedFoundationMove(
     return;
   }
 
+  // Keep the previous top card visible beneath the (hidden) new top, so the
+  // foundation slot does not flash empty while the ghost is still flying.
+  let underEl: HTMLElement | null = null;
+  if (prevTop && target.kind === "foundation") {
+    const slot = document.getElementById(`foundation-${target.pile}`);
+    if (slot) {
+      underEl = createCardEl(prevTop);
+      underEl.style.position = "absolute";
+      underEl.style.top = "0";
+      underEl.style.left = "0";
+      underEl.classList.add("card--auto-flight-under");
+      slot.insertBefore(underEl, dest[0]!);
+    }
+  }
+
   try {
     await flyCard(card, from, to, FLY_MS_FOUNDATION, {
       rippleColor: "rgba(110,168,255,0.9)",
       settleRatio: FLY_SETTLE_RATIO_FOUNDATION,
+      onSettle: () => {
+        // Reveal the real new top card the moment the ghost lands, then remove
+        // the placeholder previous-top underneath.
+        dest[0]!.classList.remove("card--auto-flight-source");
+        if (underEl) {
+          underEl.remove();
+          underEl = null;
+        }
+      },
     });
   } finally {
     dest[0]!.classList.remove("card--auto-flight-source");
+    if (underEl) underEl.remove();
   }
 }
 
@@ -971,12 +997,16 @@ async function runAutoFoundationChainAnimation(expectedEpoch: number): Promise<v
     const card = peekMovingCards(gameState, next.source)?.[0];
     if (!card) break;
     const from = rectForMoveSource(next.source);
+    const prevTop =
+      next.target.kind === "foundation"
+        ? (gameState.foundations[next.target.pile] ?? []).slice(-1)[0] ?? null
+        : null;
     const applied = tryApplyMove(gameState, next.source, next.target);
     if (!applied) break;
     gameState = applied;
     renderGame();
     if (!from) continue;
-    await flyCommittedFoundationMove(card, from, next.target);
+    await flyCommittedFoundationMove(card, from, next.target, prevTop);
     if (expectedEpoch !== animEpoch) return;
   }
 }

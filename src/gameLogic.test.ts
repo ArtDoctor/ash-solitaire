@@ -238,4 +238,64 @@ describe("auto foundation rank spread", () => {
       peekNextAutoFoundationMove(g, { maxFoundationRankSpread: 3 }),
     ).not.toBeNull();
   });
+
+  it("counts empty foundations as rank 0 when enforcing spread", () => {
+    // ♥/♦/♣ already at 5, ♠ still empty. Playing 6♥ keeps 3 tops at 5/6 but ♠ at 0 → spread 6.
+    const g: GameState = {
+      tableau: [[], [], [], [], [], [], []],
+      foundations: [
+        [],
+        [
+          { rank: "A", suit: "♥" }, { rank: "2", suit: "♥" },
+          { rank: "3", suit: "♥" }, { rank: "4", suit: "♥" },
+          { rank: "5", suit: "♥" },
+        ],
+        [
+          { rank: "A", suit: "♦" }, { rank: "2", suit: "♦" },
+          { rank: "3", suit: "♦" }, { rank: "4", suit: "♦" },
+          { rank: "5", suit: "♦" },
+        ],
+        [
+          { rank: "A", suit: "♣" }, { rank: "2", suit: "♣" },
+          { rank: "3", suit: "♣" }, { rank: "4", suit: "♣" },
+          { rank: "5", suit: "♣" },
+        ],
+      ],
+      stock: [],
+      waste: [{ rank: "6", suit: "♥" }],
+      freeCell: null,
+    };
+    expect(peekNextAutoFoundationMove(g, { maxFoundationRankSpread: 5 })).toBeNull();
+    expect(
+      peekNextAutoFoundationMove(g, { maxFoundationRankSpread: 6 }),
+    ).not.toBeNull();
+  });
+});
+
+describe("auto foundation picks lowest rank first", () => {
+  it("prefers the lowest-rank eligible card over a higher waste card", () => {
+    // Waste top is 6♥ (eligible since ♥ foundation at 5). Tableau col 0 exposes 2♣ (eligible since ♣ at A).
+    // Old behavior: played 6♥ first because waste is scanned first. New: 2♣ goes first (lower rank).
+    const g: GameState = {
+      tableau: [
+        [{ rank: "2", suit: "♣" }],
+        [], [], [], [], [], [],
+      ],
+      foundations: [
+        [],
+        [
+          { rank: "A", suit: "♥" }, { rank: "2", suit: "♥" },
+          { rank: "3", suit: "♥" }, { rank: "4", suit: "♥" },
+          { rank: "5", suit: "♥" },
+        ],
+        [],
+        [{ rank: "A", suit: "♣" }],
+      ],
+      stock: [],
+      waste: [{ rank: "6", suit: "♥" }],
+      freeCell: null,
+    };
+    const peek = peekNextAutoFoundationMove(g);
+    expect(peek?.source).toEqual({ kind: "tableau", col: 0, start: 0 });
+  });
 });
